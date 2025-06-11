@@ -1,3 +1,4 @@
+import os
 import discord
 from discord.ext import commands
 import logging
@@ -5,7 +6,7 @@ import logging
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# Load all your cogs on startup
+# List your cogs/extensions
 initial_extensions = [
     'cogs.cleanup_cog',
     'cogs.dm_response',
@@ -32,5 +33,15 @@ async def setup():
 
 if __name__ == '__main__':
     import asyncio
-    asyncio.run(setup())
-    bot.run('YOUR_DISCORD_TOKEN')
+
+    # Load your Discord bot token from the environment variable
+    token = os.environ.get('DISCORD_TOKEN')
+    if not token:
+        raise ValueError("DISCORD_TOKEN environment variable is not set!")
+
+    # Run bot with setup, then start
+    async def runner():
+        await setup()
+        await bot.start(token)
+
+    asyncio.run(runner())
