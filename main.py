@@ -15,7 +15,7 @@ initial_extensions = [
     'cogs.register_modal',
     'cogs.sos_cog',
     'cogs.sos_view',
-    'cogs.extract_cog',         # <-- ADD THIS
+    'cogs.extract_cog',
 ]
 
 @bot.event
