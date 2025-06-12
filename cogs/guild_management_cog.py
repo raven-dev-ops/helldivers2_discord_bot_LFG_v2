@@ -595,12 +595,9 @@ class GuildManagementCog(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         logging.info("GuildManagementCog is ready.")
-        # The previous issue was that on_ready running setup_guild every time
-        # caused channel duplicates because the old ones weren't cleaned up.
-        # With the new cleanup logic in setup_guild, running it on_ready
-        # is now the intended behavior to ensure the guild state is correct on boot.
 
-        logging.info("Starting guild setup for all joined guilds on startup.")
+
+        logging.info("Starting guild setup and cleanup for all joined guilds on startup.")
         # Define the list of allowed guild IDs
         allowed_guild_ids = [1172948128509468742, 1221490168670715936, 1214787549655203862]
 
@@ -609,20 +606,8 @@ class GuildManagementCog(commands.Cog):
             if guild.id in allowed_guild_ids:
                 try:
                     # force_refresh=True here will ensure old bot messages are deleted from the SOS channel
-                    # and the menu is resent, besides performing channel/role setup/cleanup.
+                    # and the menu is resent IF setup_guild succeeds in setting up the gpt_channel.
                     await self.setup_guild(guild, force_refresh=True)
-                except Exception as e:
-                    logging.error(f"Error setting up guild '{guild.name}': {e}")
-            else:
-                logging.info(f"Skipping setup for guild: {guild.name} (ID: {guild.id}) - Not in the allowed list.")
-
-        # After setting up known guilds, check and leave unknown ones
-        await self._leave_unknown_guilds()
-        logging.info("GuildManagementCog is ready.")
-        # The previous issue was that on_ready running setup_guild every time
-        # caused channel duplicates because the old ones weren't cleaned up.
-        # With the new cleanup logic in setup_guild, running it on_ready
-        # is now the intended behavior to ensure the guild state is correct on boot.
 
         logging.info("Starting guild setup for all joined guilds on startup.")
         # Define the list of allowed guild IDs
