@@ -15,15 +15,22 @@ MIN_GAMES_PLAYED = 3
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 logger = logging.getLogger(__name__)
 
-# List of monthly focuses (repeats twice for 12 months)
+# Define the stat focus for each month, 1-indexed (Jan=0, ..., Dec=11)
+# Each tuple: (label, stat_key)
 MONTHLY_FOCUSES = [
-    ("Most Average Kills", "average_kills"),
-    ("Most Total Kills", "kills"),
-    ("Most Average Accuracy", "average_accuracy"),
-    ("Most Shots Fired", "shots_fired"),
-    ("Least Deaths", "least_deaths"),
-    ("Most Melee Kills", "melee_kills"),
-] * 2  # 12 months
+    ("Most Average Kills", "average_kills"),    # JANUARY
+    ("Most Total Kills", "kills"),              # FEBRUARY
+    ("Most Melee Kills", "melee_kills"),        # MARCH
+    ("Most Shots Fired", "shots_fired"),        # APRIL
+    ("Least Deaths", "least_deaths"),           # MAY
+    ("Most Average Kills", "average_kills"),    # JUNE
+    ("Best Accuracy", "average_accuracy"),      # JULY (custom stat for July)
+    ("Most Total Kills", "kills"),              # AUGUST
+    ("Most Melee Kills", "melee_kills"),        # SEPTEMBER
+    ("Most Shots Fired", "shots_fired"),        # OCTOBER
+    ("Least Deaths", "least_deaths"),           # NOVEMBER
+    ("Most Average Kills", "average_kills"),    # DECEMBER
+]
 
 def get_current_focus():
     """Get the leaderboard focus for the current month (0-indexed)."""
@@ -82,8 +89,10 @@ class LeaderboardCog(commands.Cog):
                                 pass
                 # Post leaderboard
                 if not embeds:
+                    now = datetime.utcnow()
+                    month_str = now.strftime("%B").upper()
                     embed = discord.Embed(
-                        title=f"**GPT {datetime.utcnow():%B %Y} LEADERBOARD**",
+                        title=f"**GPT {month_str} {now.year} LEADERBOARD**",
                         description=f"No leaderboard data available.\nPlayers must submit at least ({MIN_GAMES_PLAYED}) games to appear!",
                         color=discord.Color.blue()
                     )
@@ -195,12 +204,12 @@ class LeaderboardCog(commands.Cog):
             return [], image_path
 
         now = datetime.utcnow()
-        month_str = now.strftime("%B %Y")
+        month_str = now.strftime("%B").upper()
         num_pages = (len(leaderboard_data) + batch_size - 1) // batch_size
         for i in range(num_pages):
             batch = leaderboard_data[i*batch_size:(i+1)*batch_size]
             embed = discord.Embed(
-                title=f"**{month_str.upper()} ALLIANCE LEADERBOARD**\n*({focus_title})*",
+                title=f"**{month_str} {now.year} ALLIANCE LEADERBOARD**\n*({focus_title})*",
                 color=discord.Color.blurple()
             )
             if num_pages > 1:
