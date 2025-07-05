@@ -4,6 +4,13 @@ from discord.ext import commands, tasks
 import logging
 import asyncio
 
+MENU_VIEW_TITLES = [
+    "Welcome to the SOS Alliance Network!",
+    "GPT SOS LFG NETWORK",
+    "HELLDIVERS SOS LFG NETWORK!",
+    "Welcome to the GPT LFG Network!"
+]
+
 class CleanupCog(commands.Cog):
     """
     Periodically and on-startup cleans up old SOS messages, empty voice channels,
@@ -123,7 +130,7 @@ class CleanupCog(commands.Cog):
                     if embed.title == "SOS ACTIVATED":
                         logging.info(f"Deleting old SOS message in '{guild.name}' (Message ID: {message.id}).")
                         await message.delete()
-                    elif embed.title == "Welcome to the SOS Alliance Network!":
+                    elif embed.title in MENU_VIEW_TITLES:
                         logging.info(f"Deleting old menu view message in '{guild.name}' (Message ID: {message.id}).")
                         await message.delete()
         except Exception as e:
