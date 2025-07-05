@@ -19,6 +19,10 @@ initial_extensions = [
     'cogs.sos_view',
     'cogs.extract_cog',
     'cogs.cleanup_cog',
+    'cogs.departure_cog',
+    'cogs.members_cog',
+    'cogs.promotion_cog',
+    'cogs.arrival_cog',
 ]
 
 @bot.event
