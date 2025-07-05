@@ -5,6 +5,13 @@ from discord.ext import commands
 import logging
 import os
 
+# Map each clan name to the ID of the guild where we store the invite link
+CLAN_SERVER_IDS = {
+    "Guardians of Freedom": 1172948128509468742,
+    "Heck Snorkelers": 1221490168670715936,
+    "Galactic Phantom Taskforce": 1214787549655203862,
+}
+
 # Define the path to the image file relative to where the bot is run
 IMAGE_PATH = "gpt_network.png"
 
