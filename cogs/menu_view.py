@@ -170,7 +170,7 @@ class MenuViewCog(commands.Cog):
             )
 
             embed = discord.Embed(
-                title="GPT SOS LFG NETWORK",
+                title="GPT HELLDIVER NETWORK",
                 description=embed_description,
                 color=discord.Color.blue()
             )
