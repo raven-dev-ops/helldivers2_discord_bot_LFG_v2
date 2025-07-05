@@ -5,6 +5,7 @@ from discord.ext import commands, tasks
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from collections import defaultdict
+from datetime import datetime
 
 CATEGORY_NAME = "GPT NETWORK"
 LEADERBOARD_CHANNEL_NAME = "❗｜leaderboard"
@@ -14,28 +15,63 @@ MIN_GAMES_PLAYED = 3
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 logger = logging.getLogger(__name__)
 
+# List of monthly focuses (repeats twice for 12 months)
+MONTHLY_FOCUSES = [
+    ("Most Average Kills", "average_kills"),
+    ("Most Total Kills", "kills"),
+    ("Most Average Accuracy", "average_accuracy"),
+    ("Most Shots Fired", "shots_fired"),
+    ("Least Deaths", "least_deaths"),
+    ("Most Melee Kills", "melee_kills"),
+] * 2  # 12 months
+
+def get_current_focus():
+    """Get the leaderboard focus for the current month (0-indexed)."""
+    month_idx = datetime.utcnow().month - 1  # 0-11
+    return MONTHLY_FOCUSES[month_idx]
+
 class LeaderboardCog(commands.Cog):
     """
-    June 2025: Best Melee Kills (shows all stats).
+    Dynamic monthly leaderboard that updates focus/title each month.
     """
 
     def __init__(self, bot):
         self.bot = bot
         self.leaderboard_lock = asyncio.Lock()
         self.update_leaderboard_task.start()
+        self.schedule_monthly_update.start()
 
     def cog_unload(self):
         self.update_leaderboard_task.cancel()
+        self.schedule_monthly_update.cancel()
 
     @tasks.loop(hours=8)
     async def update_leaderboard_task(self):
+        await self._run_leaderboard_update()
+
+    @tasks.loop(hours=1)
+    async def schedule_monthly_update(self):
+        """Runs every hour, triggers a leaderboard update on the 28th of each month UTC."""
+        now = datetime.utcnow()
+        if now.day == 28 and now.hour == 0:  # Midnight UTC on the 28th
+            logger.info("It's the 28th - triggering forced leaderboard update for monthly rollover!")
+            await self._run_leaderboard_update(force=True)
+
+    @update_leaderboard_task.before_loop
+    @schedule_monthly_update.before_loop
+    async def before_loops(self):
+        await self.bot.wait_until_ready()
+
+    async def _run_leaderboard_update(self, force=False):
         async with self.leaderboard_lock:
-            leaderboard_data = await self.calculate_leaderboard_data()
-            embeds, image_path = await self.build_leaderboard_embeds(leaderboard_data)
+            title, stat_key = get_current_focus()
+            leaderboard_data = await self.calculate_leaderboard_data(stat_key)
+            embeds, image_path = await self.build_leaderboard_embeds(leaderboard_data, title, stat_key)
             for guild in self.bot.guilds:
                 channel = await self.ensure_leaderboard_channel(guild)
                 if not channel:
                     continue
+                # Clean up old leaderboard messages
                 if channel.permissions_for(guild.me).manage_messages:
                     async for msg in channel.history(limit=20):
                         if msg.author == self.bot.user:
@@ -44,9 +80,10 @@ class LeaderboardCog(commands.Cog):
                                 await asyncio.sleep(0.6)
                             except Exception:
                                 pass
+                # Post leaderboard
                 if not embeds:
                     embed = discord.Embed(
-                        title="**GPT JUNE 2025 LEADERBOARD**",
+                        title=f"**GPT {datetime.utcnow():%B %Y} LEADERBOARD**",
                         description=f"No leaderboard data available.\nPlayers must submit at least ({MIN_GAMES_PLAYED}) games to appear!",
                         color=discord.Color.blue()
                     )
@@ -61,10 +98,6 @@ class LeaderboardCog(commands.Cog):
                             file = discord.File(image_path, filename=os.path.basename(image_path))
                         await channel.send(embed=embed, file=file if file else discord.utils.MISSING)
                         await asyncio.sleep(1.1)
-
-    @update_leaderboard_task.before_loop
-    async def before_update_leaderboard_task(self):
-        await self.bot.wait_until_ready()
 
     async def ensure_leaderboard_channel(self, guild: discord.Guild):
         channel = discord.utils.get(guild.text_channels, name=LEADERBOARD_CHANNEL_NAME)
@@ -85,7 +118,7 @@ class LeaderboardCog(commands.Cog):
         except Exception:
             return None
 
-    async def calculate_leaderboard_data(self):
+    async def calculate_leaderboard_data(self, stat_key):
         mongo_uri = os.getenv('MONGODB_URI')
         if not mongo_uri:
             return []
@@ -128,7 +161,8 @@ class LeaderboardCog(commands.Cog):
             leaderboard = []
             for name, d in players.items():
                 if d["games_played"] >= MIN_GAMES_PLAYED:
-                    accuracy = (d["shots_hit"] / d["shots_fired"] * 100) if d["shots_fired"] > 0 else 0.0
+                    average_kills = d["kills"] / d["games_played"] if d["games_played"] else 0.0
+                    average_accuracy = (d["shots_hit"] / d["shots_fired"] * 100) if d["shots_fired"] > 0 else 0.0
                     leaderboard.append({
                         "player_name": name,
                         "melee_kills": d["melee_kills"],
@@ -138,15 +172,21 @@ class LeaderboardCog(commands.Cog):
                         "shots_hit": d["shots_hit"],
                         "games_played": d["games_played"],
                         "Clan": d["Clan"],
-                        "accuracy": accuracy,
+                        "average_kills": average_kills,
+                        "average_accuracy": average_accuracy,
+                        "least_deaths": -d["deaths"],  # Negative for sorting (least at top)
                     })
-            leaderboard.sort(key=lambda x: -x["melee_kills"])
+            # Sort logic based on stat_key
+            if stat_key == "least_deaths":
+                leaderboard.sort(key=lambda x: (x[stat_key], -x["games_played"]))  # fewest deaths, most games
+            else:
+                leaderboard.sort(key=lambda x: (-x[stat_key], -x["games_played"]))
             return leaderboard
         except Exception as e:
             logger.error(f"Error fetching leaderboard: {e}")
             return []
 
-    async def build_leaderboard_embeds(self, leaderboard_data):
+    async def build_leaderboard_embeds(self, leaderboard_data, focus_title, stat_key):
         embeds = []
         batch_size = 10
         image_path = LEADERBOARD_IMAGE_PATH if os.path.exists(LEADERBOARD_IMAGE_PATH) else None
@@ -154,11 +194,13 @@ class LeaderboardCog(commands.Cog):
         if not leaderboard_data:
             return [], image_path
 
+        now = datetime.utcnow()
+        month_str = now.strftime("%B %Y")
         num_pages = (len(leaderboard_data) + batch_size - 1) // batch_size
         for i in range(num_pages):
             batch = leaderboard_data[i*batch_size:(i+1)*batch_size]
             embed = discord.Embed(
-                title=f"**JUNE ALLIANCE LEADERBOARD**\n*(Most Melee Kills)*",
+                title=f"**{month_str.upper()} ALLIANCE LEADERBOARD**\n*({focus_title})*",
                 color=discord.Color.blurple()
             )
             if num_pages > 1:
@@ -174,14 +216,24 @@ class LeaderboardCog(commands.Cog):
                 elif idx == 2: rank_emoji = "🥈 "
                 elif idx == 3: rank_emoji = "🥉 "
                 name = (player['player_name'][:22] + "...") if len(player['player_name']) > 25 else player['player_name']
+                stat_val = player[stat_key]
+                if stat_key == "average_accuracy":
+                    stat_val_str = f"{stat_val:.1f}%"
+                elif stat_key == "average_kills":
+                    stat_val_str = f"{stat_val:.2f}"
+                elif stat_key == "least_deaths":
+                    stat_val_str = f"{-stat_val}"  # Show as positive number
+                else:
+                    stat_val_str = f"{stat_val}"
+
                 embed.add_field(
                     name=f"{rank_emoji}#{idx}. {name}",
                     value=(
                         f"**Clan:** {player['Clan']}\n"
-                        f"**Melee Kills:** {player['melee_kills']}\n"
+                        f"**{focus_title}:** {stat_val_str}\n"
                         f"**Kills:** {player['kills']}\n"
                         f"**Deaths:** {player['deaths']}\n"
-                        f"**Accuracy:** {player['accuracy']:.1f}%\n"
+                        f"**Accuracy:** {(player['shots_hit'] / player['shots_fired'] * 100 if player['shots_fired'] else 0.0):.1f}%\n"
                         f"**Shots Hit:** {player['shots_hit']}\n"
                         f"**Shots Fired:** {player['shots_fired']}\n"
                         f"*Games: {player['games_played']}*"
