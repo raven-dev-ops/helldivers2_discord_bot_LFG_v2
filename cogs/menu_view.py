@@ -154,9 +154,6 @@ class MenuViewCog(commands.Cog):
                 else:
                     logging.warning(f"No server data or invite link found in DB for clan '{clan_name}' (Server ID: {clan_server_id}). Using placeholder link.")
 
-                alliance_link_chunks.append(f"[{clan_name}]({invite_link})")
-
-            alliance_links_md = " | ".join(alliance_link_chunks)
 
             embed_description = (
                 f"**{alliance_links_md}**\n\n"
