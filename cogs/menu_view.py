@@ -200,14 +200,11 @@ class MenuViewCog(commands.Cog):
             # >>> Start of image embedding logic <<<
             file = None
             try:
-                 # Check if the image file exists at the defined path
-                 if os.path.exists(IMAGE_PATH):
-                      # Create a discord.File object from the image file
-                      file = discord.File(IMAGE_PATH, filename="gpt_network.png")
-                      # Set the image of the embed to the attached file
-                      # The URL format is "attachment://filename.ext"
-                      embed.set_image(url=f"attachment://gpt_network.png")
-                      logging.debug(f"Image '{IMAGE_PATH}' found and prepared for embed.")
+                 file = discord.File("./gpt_network.png", filename="gpt_network.png")
+                 embed.set_image(url="attachment://gpt_network.png")
+                 logging.debug(f"Image './gpt_network.png' prepared for embed.")
+            except FileNotFoundError:
+                 logging.warning(f"Image file not found at path: ./gpt_network.png. Cannot embed image.")
                  else:
                       logging.warning(f"Image file not found at path: {IMAGE_PATH}. Cannot embed image.")
             except Exception as e:
