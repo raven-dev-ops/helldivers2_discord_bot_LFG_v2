@@ -93,6 +93,20 @@ class SOSMenuView(discord.ui.View):
                 ephemeral=True
             )
 
+    @discord.ui.button(
+        label="SUBMIT STATS", 
+        style=discord.ButtonStyle.blurple, 
+        custom_id="submit_stats_button"
+    )
+    async def submit_stats_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        try:
+            await interaction.response.send_message(
+                "To submit your mission stats for official reporting, use the `/extract` command in this server and upload your mission screenshot image.\n\n"
+                "Make sure your Discord account is registered and your screenshot is clear for the best results.",
+                ephemeral=True
+            )
+        except Exception as e:
+            logging.error(f"Error in submit_stats_button: {e}")
 
 class MenuViewCog(commands.Cog):
     """
