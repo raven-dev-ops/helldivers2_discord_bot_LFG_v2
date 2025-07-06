@@ -15,7 +15,6 @@ MIN_GAMES_PLAYED = 3
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 logger = logging.getLogger(__name__)
 
-# Define the stat focus for each month, 1-indexed (Jan=0, ..., Dec=11)
 # Each tuple: (label, stat_key)
 MONTHLY_FOCUSES = [
     ("Most Average Kills", "average_kills"),    # JANUARY
@@ -24,7 +23,7 @@ MONTHLY_FOCUSES = [
     ("Most Shots Fired", "shots_fired"),        # APRIL
     ("Least Deaths", "least_deaths"),           # MAY
     ("Most Average Kills", "average_kills"),    # JUNE
-    ("Best Accuracy", "average_accuracy"),      # JULY (custom stat for July)
+    ("Best Accuracy", "average_accuracy"),      # JULY (special stat)
     ("Most Total Kills", "kills"),              # AUGUST
     ("Most Melee Kills", "melee_kills"),        # SEPTEMBER
     ("Most Shots Fired", "shots_fired"),        # OCTOBER
@@ -33,14 +32,11 @@ MONTHLY_FOCUSES = [
 ]
 
 def get_current_focus():
-    """Get the leaderboard focus for the current month (0-indexed)."""
-    month_idx = datetime.utcnow().month - 1  # 0-11
+    month_idx = datetime.utcnow().month - 1
     return MONTHLY_FOCUSES[month_idx]
 
 class LeaderboardCog(commands.Cog):
-    """
-    Dynamic monthly leaderboard that updates focus/title each month.
-    """
+    """Dynamic monthly leaderboard with correct visibility."""
 
     def __init__(self, bot):
         self.bot = bot
@@ -58,9 +54,8 @@ class LeaderboardCog(commands.Cog):
 
     @tasks.loop(hours=1)
     async def schedule_monthly_update(self):
-        """Runs every hour, triggers a leaderboard update on the 28th of each month UTC."""
         now = datetime.utcnow()
-        if now.day == 28 and now.hour == 0:  # Midnight UTC on the 28th
+        if now.day == 28 and now.hour == 0:
             logger.info("It's the 28th - triggering forced leaderboard update for monthly rollover!")
             await self._run_leaderboard_update(force=True)
 
@@ -109,37 +104,46 @@ class LeaderboardCog(commands.Cog):
                         await asyncio.sleep(1.1)
 
     async def ensure_leaderboard_channel(self, guild: discord.Guild):
+        # Try to get channel
         channel = discord.utils.get(guild.text_channels, name=LEADERBOARD_CHANNEL_NAME)
-        if channel and channel.permissions_for(guild.me).send_messages:
-            return channel
-        try:
-            category = discord.utils.get(guild.categories, name=CATEGORY_NAME)
-            if not category and guild.me.guild_permissions.manage_channels:
-                category = await guild.create_category(CATEGORY_NAME)
-            if not channel and guild.me.guild_permissions.manage_channels:
-                overwrites = {
-                    guild.default_role: discord.PermissionOverwrite(view_channel=True, send_messages=False),
-                    guild.me: discord.PermissionOverwrite(send_messages=True, embed_links=True, attach_files=True, manage_messages=True)
-                }
-                channel = await guild.create_text_channel(
-                    LEADERBOARD_CHANNEL_NAME, category=category, overwrites=overwrites)
-            return channel
-        except Exception:
-            return None
+        category = discord.utils.get(guild.categories, name=CATEGORY_NAME)
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=True, send_messages=False),
+            guild.me: discord.PermissionOverwrite(send_messages=True, embed_links=True, attach_files=True, manage_messages=True)
+        }
+        # Check for creation
+        if not category and guild.me.guild_permissions.manage_channels:
+            category = await guild.create_category(CATEGORY_NAME)
+        if not channel and guild.me.guild_permissions.manage_channels:
+            channel = await guild.create_text_channel(
+                LEADERBOARD_CHANNEL_NAME, category=category, overwrites=overwrites)
+        # Update overwrites on existing channel to ensure visibility
+        elif channel:
+            changed = False
+            # Make sure @everyone can see, but not send
+            current_ow = channel.overwrites_for(guild.default_role)
+            if current_ow.view_channel is not True or current_ow.send_messages not in [False, None]:
+                await channel.set_permissions(guild.default_role, view_channel=True, send_messages=False)
+                changed = True
+            # Make sure bot can send
+            bot_ow = channel.overwrites_for(guild.me)
+            if not bot_ow.send_messages or not bot_ow.embed_links or not bot_ow.attach_files:
+                await channel.set_permissions(guild.me, send_messages=True, embed_links=True, attach_files=True, manage_messages=True)
+                changed = True
+            if changed:
+                logger.info(f"Updated overwrites for leaderboard channel in guild {guild.name} ({guild.id})")
+        return channel
 
     async def calculate_leaderboard_data(self, stat_key):
         mongo_uri = os.getenv('MONGODB_URI')
         if not mongo_uri:
             return []
-
         try:
             db = self.bot.mongo_db if hasattr(self.bot, 'mongo_db') else AsyncIOMotorClient(mongo_uri)['GPTHellbot']
             stats_collection = db['User_Stats']
             alliance_collection = db['Alliance']
-
             servers = await alliance_collection.find({}, {"discord_server_id": 1, "server_name": 1}).to_list(None)
             server_map = {str(s['discord_server_id']): s['server_name'] for s in servers if 'discord_server_id' in s and 'server_name' in s}
-
             players = defaultdict(lambda: {
                 "melee_kills": 0, "kills": 0, "deaths": 0, "shots_fired": 0, "shots_hit": 0,
                 "games_played": 0, "Clan": "Unknown Clan"
@@ -166,7 +170,6 @@ class LeaderboardCog(commands.Cog):
                 server_id = str(doc.get('discord_server_id', ''))
                 if server_id in server_map:
                     players[name]["Clan"] = server_map[server_id]
-
             leaderboard = []
             for name, d in players.items():
                 if d["games_played"] >= MIN_GAMES_PLAYED:
@@ -185,7 +188,6 @@ class LeaderboardCog(commands.Cog):
                         "average_accuracy": average_accuracy,
                         "least_deaths": -d["deaths"],  # Negative for sorting (least at top)
                     })
-            # Sort logic based on stat_key
             if stat_key == "least_deaths":
                 leaderboard.sort(key=lambda x: (x[stat_key], -x["games_played"]))  # fewest deaths, most games
             else:
@@ -234,7 +236,6 @@ class LeaderboardCog(commands.Cog):
                     stat_val_str = f"{-stat_val}"  # Show as positive number
                 else:
                     stat_val_str = f"{stat_val}"
-
                 embed.add_field(
                     name=f"{rank_emoji}#{idx}. {name}",
                     value=(
