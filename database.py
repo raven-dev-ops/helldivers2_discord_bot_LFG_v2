@@ -13,9 +13,7 @@ import re
 logger = logging.getLogger(__name__)
 
 # MongoDB Client and Database
-mongo_client = AsyncIOMotorClient(MONGODB_URI)
-db = mongo_client[DATABASE_NAME]
-
+client = None # Global client variable
 registration_collection = db[REGISTRATION_COLLECTION]
 stats_collection = db[STATS_COLLECTION]
 server_listing_collection = db[SERVER_LISTING_COLLECTION]
@@ -40,6 +38,35 @@ def normalize_name(name: str) -> str:
     return name
 
 ################################################
+# MONGO CLIENT AND INDEX MANAGEMENT
+################################################
+
+async def get_mongo_client() -> AsyncIOMotorClient:
+    """
+    Initializes and returns the MongoDB client.
+    """
+    global client
+    if client is None:
+        client = AsyncIOMotorClient(MONGODB_URI)
+        logger.info("MongoDB client initialized.")
+    return client
+
+async def create_indexes():
+    """
+    Ensures necessary indexes are created on startup.
+    """
+    try:
+        client = await get_mongo_client()
+        db = client[DATABASE_NAME]
+        
+        await db[STATS_COLLECTION].create_index("server_nickname")
+        await db[REGISTRATION_COLLECTION].create_index("player_name")
+        await db[REGISTRATION_COLLECTION].create_index("discord_id")
+        await db[REGISTRATION_COLLECTION].create_index("discord_server_id")
+        await db[SERVER_LISTING_COLLECTION].create_index("discord_server_id")
+        logger.info("MongoDB indexes created/ensured.")
+    except Exception as e:
+        logger.error(f"Error creating MongoDB indexes: {e}")
 # SERVER LISTING LOOKUPS
 ################################################
 
