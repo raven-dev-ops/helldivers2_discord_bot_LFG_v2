@@ -9,21 +9,6 @@ logging.basicConfig(level=logging.INFO)
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-initial_extensions = [
-    'cogs.dm_response',
-    'cogs.guild_management_cog',
-    'cogs.leaderboard_cog',
-    'cogs.extract_cog',
-    'cogs.menu_view',
-    'cogs.register_modal',
-    'cogs.sos_cog',
-    'cogs.sos_view',
-    'cogs.cleanup_cog',
-    'cogs.departure_cog',
-    'cogs.members_cog',
-    'cogs.promotion_cog',
-    'cogs.arrival_cog',
-]
 
 @bot.event
 async def on_ready():
@@ -31,13 +16,29 @@ async def on_ready():
     print('------')
     print('Cogs loaded:', list(bot.cogs.keys()))  # See actual registered cog class names
 
-async def setup():
-    for ext in initial_extensions:
+async def load_cogs():
+    """
+    Load the bot's cogs in the correct order.
+    """
+    cogs = [
+        'cogs.departure_cog',
+        'cogs.members_cog',
+        'cogs.promotion_cog',
+        'cogs.arrival_cog',
+        'cogs.guild_management_cog',
+        'cogs.leaderboard_cog',
+        'cogs.sos_cog',
+        'cogs.cleanup_cog',
+        'cogs.dm_response',
+        'cogs.extract_cog',
+    ]
+    for cog in cogs:
         try:
-            await bot.load_extension(ext)
-            logging.info(f"Loaded extension {ext}")
+            await bot.load_extension(cog)
+            logging.info(f"Successfully loaded cog: {cog}")
         except Exception as e:
-            logging.error(f'Failed to load extension {ext}: {e}')
+            logging.error(f"Failed to load cog {cog}: {e}")
+            logging.error(traceback.format_exc())
 
 if __name__ == '__main__':
     import asyncio
@@ -55,7 +56,7 @@ if __name__ == '__main__':
     bot.mongo_db = mongo_client[db_name]
 
     async def runner():
-        await setup()
+        await load_cogs()
         await bot.start(token)
 
     asyncio.run(runner())

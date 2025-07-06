@@ -12,6 +12,7 @@ class PromotionCog(commands.Cog):
     async def on_member_update(self, before, after):
         """Detect role changes and handle promotions."""
         try:
+            logging.info(f"on_member_update triggered for {after.display_name}")
             if before.roles != after.roles:
                 added_roles = set(after.roles) - set(before.roles)
                 for role in added_roles:
@@ -22,6 +23,7 @@ class PromotionCog(commands.Cog):
     async def handle_role_assignment(self, member, role):
         """Handles promotions when a specific role is assigned."""
         try:
+            logging.info(f"handle_role_assignment triggered for {member.display_name} with role ID: {role.id}")
             # Use variables directly from database.py
             if role.id == cadet_role_id:
                 cadet_chat = self.bot.get_channel(cadet_chat_id)
@@ -33,11 +35,13 @@ class PromotionCog(commands.Cog):
 
             if role.id == class_a_role_id:
                 completed_missions = await self.fetch_completed_missions(member.id)
+                logging.info(f"Fetched completed missions for {member.display_name}: {completed_missions}")
                 if completed_missions is not None:
                     welcome_channel = self.bot.get_channel(welcome_channel_id)
                     if welcome_channel:
                         await welcome_channel.send(
                             f"🎉 Congratulations {member.mention}! You have achieved **Class A Citizen** status by completing {completed_missions} missions! 🎉"
+
                         )
                         logging.info(f"Announced promotion for {member.display_name} in the welcome channel.")
 
@@ -50,12 +54,13 @@ class PromotionCog(commands.Cog):
             mongo_client = await get_mongo_client()
             db = mongo_client['GPTHellbot']
             stats_collection = db['User_Stats']
-
+            
+            logging.info(f"Attempting to fetch stats for user ID: {user_id}")
             user_stats = await stats_collection.find_one({"user_id": str(user_id)})
+            logging.info(f"User stats found for {user_id}: {user_stats is not None}")
             return user_stats.get('Completed_Missions', 0) if user_stats else None
         except Exception as e:
             logging.error(f"Error fetching completed missions for user {user_id}: {e}")
             return None
-
 async def setup(bot):
     await bot.add_cog(PromotionCog(bot))
