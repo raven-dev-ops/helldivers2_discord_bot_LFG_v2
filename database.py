@@ -13,10 +13,11 @@ import re
 logger = logging.getLogger(__name__)
 
 # MongoDB Client and Database
-client = None # Global client variable
-registration_collection = db[REGISTRATION_COLLECTION]
-stats_collection = db[STATS_COLLECTION]
-server_listing_collection = db[SERVER_LISTING_COLLECTION]
+client = None  # Global client variable
+_db = None     # Global db variable
+registration_collection = None
+stats_collection = None
+server_listing_collection = None
 
 from ocr_processing import clean_ocr_result
 
@@ -43,12 +44,16 @@ def normalize_name(name: str) -> str:
 
 async def get_mongo_client() -> AsyncIOMotorClient:
     """
-    Initializes and returns the MongoDB client.
+    Initializes and returns the MongoDB client and binds collections.
     """
-    global client
+    global client, _db, registration_collection, stats_collection, server_listing_collection
     if client is None:
         client = AsyncIOMotorClient(MONGODB_URI)
-        logger.info("MongoDB client initialized.")
+        _db = client[DATABASE_NAME]
+        registration_collection = _db[REGISTRATION_COLLECTION]
+        stats_collection = _db[STATS_COLLECTION]
+        server_listing_collection = _db[SERVER_LISTING_COLLECTION]
+        logger.info("MongoDB client and collections initialized.")
     return client
 
 async def create_indexes():
@@ -56,17 +61,16 @@ async def create_indexes():
     Ensures necessary indexes are created on startup.
     """
     try:
-        client = await get_mongo_client()
-        db = client[DATABASE_NAME]
-        
-        await db[STATS_COLLECTION].create_index("server_nickname")
-        await db[REGISTRATION_COLLECTION].create_index("player_name")
-        await db[REGISTRATION_COLLECTION].create_index("discord_id")
-        await db[REGISTRATION_COLLECTION].create_index("discord_server_id")
-        await db[SERVER_LISTING_COLLECTION].create_index("discord_server_id")
+        await get_mongo_client()
+        await _db[STATS_COLLECTION].create_index("server_nickname")
+        await _db[REGISTRATION_COLLECTION].create_index("player_name")
+        await _db[REGISTRATION_COLLECTION].create_index("discord_id")
+        await _db[REGISTRATION_COLLECTION].create_index("discord_server_id")
+        await _db[SERVER_LISTING_COLLECTION].create_index("discord_server_id")
         logger.info("MongoDB indexes created/ensured.")
     except Exception as e:
         logger.error(f"Error creating MongoDB indexes: {e}")
+################################################
 # SERVER LISTING LOOKUPS
 ################################################
 
@@ -75,6 +79,7 @@ async def get_server_listing_by_id(discord_server_id: int) -> Optional[Dict[str,
     Returns the Server_Listing doc for the given guild ID, or None if not found.
     """
     try:
+        await get_mongo_client()
         doc = await server_listing_collection.find_one({"discord_server_id": discord_server_id})
         if doc:
             logger.debug(f"Fetched Server_Listing for guild {discord_server_id}: {doc}")
@@ -92,6 +97,7 @@ async def get_registered_users() -> List[Dict[str, Any]]:
     Fetch all users in the Alliance registration collection.
     """
     try:
+        await get_mongo_client()
         docs = await registration_collection.find(
             {},
             {"player_name": 1, "discord_id": 1, "discord_server_id": 1, "_id": 0}
@@ -107,6 +113,7 @@ async def get_registered_user_by_discord_id(discord_id: int) -> Optional[Dict[st
     Find a user in the Alliance collection by their discord_id.
     """
     try:
+        await get_mongo_client()
         doc = await registration_collection.find_one(
             {"discord_id": discord_id},
             {"player_name": 1, "_id": 0}
@@ -186,6 +193,7 @@ async def insert_player_data(players_data: List[Dict[str, Any]], submitted_by: s
     """
     Insert each player's stats data into the stats_collection.
     """
+    await get_mongo_client()
     for player in players_data:
         doc = {
             "player_name": player.get("player_name", "Unknown"),
@@ -218,6 +226,7 @@ async def get_clan_name_by_discord_server_id(discord_server_id: Any) -> str:
     if not discord_server_id:
         return "N/A"
     try:
+        await get_mongo_client()
         int_server_id = int(discord_server_id)
         doc = await server_listing_collection.find_one({"discord_server_id": int_server_id})
         if doc and "discord_server_name" in doc:

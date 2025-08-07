@@ -18,6 +18,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # Environment variable loader with validation
 def load_env_var(var_name, required=True):
     value = os.getenv(var_name)
+    if required and (value is None or value.strip() == ""):
+        raise ValueError(f"Required environment variable '{var_name}' is not set")
+    return value
 
 # Mongo Collections
 REGISTRATION_COLLECTION = 'Alliance'

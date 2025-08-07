@@ -6,7 +6,6 @@ charset-normalizer==3.3.2
 cog==0.9.9
 cachetools==5.5.0
 colorama==0.4.6
-discord==2.3.2
 discord.py[voice]==2.4.0
 dnspython==2.6.1
 filelock==3.14.0
