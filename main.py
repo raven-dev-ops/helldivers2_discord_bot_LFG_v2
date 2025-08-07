@@ -7,7 +7,10 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 logging.basicConfig(level=logging.INFO)
 
-intents = discord.Intents.all()
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
+intents.guilds = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 
@@ -16,6 +19,8 @@ async def on_ready():
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
     print('------')
     print('Cogs loaded:', list(bot.cogs.keys()))  # See actual registered cog class names
+    if not bot.intents.members:
+        logging.warning("GUILD_MEMBERS intent is disabled. Member join/leave events will not fire. Enable it in the Discord Developer Portal.")
 
 async def load_cogs():
     """

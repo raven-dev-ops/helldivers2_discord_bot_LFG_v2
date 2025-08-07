@@ -30,7 +30,16 @@ class DepartureCog(commands.Cog):
         try:
             channel = self.bot.get_channel(kia_channel_id)
             if not channel:
-                logging.error(f"KIA channel with ID {kia_channel_id} not found.")
+                # Fallback: try a channel named by common names
+                candidate_names = ["kia", "farewell", "goodbye", "general"]
+                for name in candidate_names:
+                    ch = discord.utils.get(member.guild.text_channels, name=name)
+                    if ch:
+                        channel = ch
+                        break
+            if not channel:
+                logging.error(f"KIA/Goodbye channel not found in guild '{member.guild.name}'.")
+                await log_to_monitor_channel(self.bot, f"KIA/Goodbye channel not found in guild '{member.guild.name}'.", logging.WARNING)
                 return
 
             message = f"{member.display_name} {random.choice(goodbye_messages)}"
