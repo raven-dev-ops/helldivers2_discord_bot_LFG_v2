@@ -8,7 +8,6 @@ import numpy as np
 import traceback
 
 from .extract_helpers import (
-    prevent_discord_formatting,
     highlight_zero_values,
     validate_stat,
     clean_for_match,
@@ -73,7 +72,10 @@ class ConfirmationView(discord.ui.View):
                 file_to_send = discord.File(BytesIO(self.shared_data.screenshot_bytes), filename=self.shared_data.screenshot_filename)
             monitor_channel = self.bot.get_channel(self.shared_data.monitor_channel_id)
             if monitor_channel:
-                await monitor_channel.send(embed=monitor_embed)
+                if file_to_send:
+                    await monitor_channel.send(embed=monitor_embed, file=file_to_send)
+                else:
+                    await monitor_channel.send(embed=monitor_embed)
             else:
                 logger.error("Monitor channel not found or invalid ID in DB.")
             await self.shared_data.message.edit(

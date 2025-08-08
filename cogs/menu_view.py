@@ -190,10 +190,11 @@ class MenuViewCog(commands.Cog):
             # Send the embed with persistent view and image (if available)
             try:
                 logging.info(f"Attempting to send menu to channel: {gpt_channel} in guild {guild.name}")
+
                 if file:
-                    sent_message = await gpt_channel.send(embed=embed, view=self.sos_menu_view, file=file)
+                    await gpt_channel.send(embed=embed, view=self.sos_menu_view, file=file)
                 else:
-                    sent_message = await gpt_channel.send(embed=embed, view=self.sos_menu_view)
+                    await gpt_channel.send(embed=embed, view=self.sos_menu_view)
                 logging.info(f"SOS menu sent to guild '{guild.name}' in channel '{gpt_channel.name}'.")
             except discord.Forbidden:
                 logging.error(f"Bot is forbidden from sending messages to channel '{gpt_channel.name}' ({gpt_channel.id}) in guild '{guild.name}'. Check channel permissions.")

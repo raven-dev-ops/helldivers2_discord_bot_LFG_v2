@@ -1,6 +1,5 @@
 # cogs/members_cog.py
 
-import discord
 from discord.ext import commands
 import logging
 from database import get_mongo_client

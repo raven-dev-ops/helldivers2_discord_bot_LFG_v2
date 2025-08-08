@@ -3,7 +3,7 @@
 import cv2
 import logging
 import numpy as np
-from config import TARGET_WIDTH, TARGET_HEIGHT, PLAYER_OFFSET, NUM_PLAYERS
+from config import PLAYER_OFFSET, NUM_PLAYERS
 
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)

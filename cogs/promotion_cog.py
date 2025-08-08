@@ -1,4 +1,3 @@
-import discord
 from discord.ext import commands
 import logging
 from config import cadet_role_id, cadet_chat_id, class_a_role_id, welcome_channel_id
@@ -28,13 +27,10 @@ class PromotionCog(commands.Cog):
             if role.id == cadet_role_id:
                 cadet_chat = self.bot.get_channel(cadet_chat_id)
                 if cadet_chat:
-                    await cadet_chat.send(
-                        f"Welcome {member.mention} to the Officer Academy for GPT Fleet: Class #13! ✨ Your road to clan leadership begins here."
-                    )
-                    logging.info(f"Sent welcome message for {member.display_name} in the cadet chat.")
+                    await cadet_chat.send(f"Welcome to the Cadet chat, {member.mention}! Please review the pinned messages.")
 
             if role.id == class_a_role_id:
-                completed_missions = await self.fetch_completed_missions(member.id)
+                completed_missions = await self.get_completed_missions(member)
                 logging.info(f"Fetched completed missions for {member.display_name}: {completed_missions}")
                 if completed_missions is not None:
                     welcome_channel = self.bot.get_channel(welcome_channel_id)
@@ -48,19 +44,17 @@ class PromotionCog(commands.Cog):
         except Exception as e:
             logging.error(f"Error handling role assignment for {member.display_name}: {e}")
 
-    async def fetch_completed_missions(self, user_id):
+    async def get_completed_missions(self, member):
         """Fetch the number of completed missions for a user."""
         try:
             mongo_client = await get_mongo_client()
             db = mongo_client['GPTHellbot']
             stats_collection = db['User_Stats']
-            
-            logging.info(f"Attempting to fetch stats for user ID: {user_id}")
-            user_stats = await stats_collection.find_one({"user_id": str(user_id)})
-            logging.info(f"User stats found for {user_id}: {user_stats is not None}")
-            return user_stats.get('Completed_Missions', 0) if user_stats else None
+            count = await stats_collection.count_documents({"discord_id": member.id})
+            return count
         except Exception as e:
-            logging.error(f"Error fetching completed missions for user {user_id}: {e}")
-            return None
+            logging.error(f"Error fetching completed missions: {e}")
+            return 0
+
 async def setup(bot):
     await bot.add_cog(PromotionCog(bot))

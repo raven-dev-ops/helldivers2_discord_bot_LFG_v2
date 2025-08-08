@@ -2,7 +2,6 @@ import logging
 import re
 import cv2
 import pytesseract
-import numpy as np
 from difflib import SequenceMatcher
 
 logging.basicConfig(level=logging.INFO)
