@@ -5,13 +5,6 @@ import logging
 # Configure logging
 logger = logging.getLogger(__name__)
 
-async def send_ephemeral(interaction, content):
-    """Send an ephemeral message to the user."""
-    try:
-        await interaction.followup.send(content=content, ephemeral=True)
-    except Exception as e:
-        logger.error(f"Error sending ephemeral message: {e}")
-
 async def log_to_monitor_channel(bot, message: str, level: int = logging.INFO):
     """Send a log message to the configured monitor channel, and also log locally."""
     try:

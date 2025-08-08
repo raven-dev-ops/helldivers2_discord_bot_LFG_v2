@@ -53,11 +53,8 @@ sos_network_id = int(load_env_var('SOS_NETWORK_ID'))
 cadet_role_id = int(load_env_var('CADET_ROLE_ID'))
 cadet_chat_id = int(load_env_var('CADET_CHAT_ID'))
 
-
-# ------------------------------------------
-# REMOVED server-specific environment usage:
-# REQUIRED_ROLE_ID     -> replaced by DB
-# MONITOR_CHANNEL_ID   -> replaced by DB
-# GPT_NETWORK_ID       -> replaced by DB
-# ------------------------------------------
+# Notes:
+# Some cogs (e.g., Extract) fetch server-specific IDs from the database,
+# while other cogs still rely on environment variables above. This mixed
+# approach is intentional for now and will be unified in a later refactor.
 

@@ -65,6 +65,8 @@ class LeaderboardCog(commands.Cog):
         await self.bot.wait_until_ready()
 
     async def _run_leaderboard_update(self, force=False):
+        if force:
+            logger.info("Forced leaderboard update requested.")
         async with self.leaderboard_lock:
             title, stat_key = get_current_focus()
             leaderboard_data = await self.calculate_leaderboard_data(stat_key)
@@ -222,10 +224,12 @@ class LeaderboardCog(commands.Cog):
                 embed.set_image(url=f"attachment://{os.path.basename(image_path)}")
 
             for idx, player in enumerate(batch, start=i*batch_size + 1):
-                rank_emoji = ""
-                if idx == 1: rank_emoji = "🥇 "
-                elif idx == 2: rank_emoji = "🥈 "
-                elif idx == 3: rank_emoji = "🥉 "
+                if idx == 1:
+                    rank_emoji = "🥇 "
+                elif idx == 2:
+                    rank_emoji = "🥈 "
+                elif idx == 3:
+                    rank_emoji = "🥉 "
                 name = (player['player_name'][:22] + "...") if len(player['player_name']) > 25 else player['player_name']
                 stat_val = player[stat_key]
                 if stat_key == "average_accuracy":

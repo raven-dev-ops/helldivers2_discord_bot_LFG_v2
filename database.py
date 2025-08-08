@@ -4,9 +4,9 @@ from typing import List, Dict, Any, Tuple, Optional
 from config import (
     MONGODB_URI, DATABASE_NAME,
     REGISTRATION_COLLECTION, STATS_COLLECTION,
-    SERVER_LISTING_COLLECTION, MATCH_SCORE_THRESHOLD
+    SERVER_LISTING_COLLECTION
 )
-from rapidfuzz import process, fuzz
+from rapidfuzz import fuzz
 from datetime import datetime
 import re
 
@@ -19,7 +19,6 @@ registration_collection = None
 stats_collection = None
 server_listing_collection = None
 
-from ocr_processing import clean_ocr_result
 
 def normalize_name(name: str) -> str:
     """
