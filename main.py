@@ -50,6 +50,7 @@ async def load_cogs():
         'cogs.arrival_cog',
         'cogs.guild_management_cog',
         'cogs.leaderboard_cog',
+        'cogs.sos_view',
         'cogs.sos_cog',
         'cogs.cleanup_cog',
         'cogs.dm_response',

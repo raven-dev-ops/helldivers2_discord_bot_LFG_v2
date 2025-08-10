@@ -28,7 +28,10 @@ class DepartureCog(commands.Cog):
     async def on_member_remove(self, member):
         """Sends a goodbye message when a member leaves."""
         try:
+            logging.info(f"on_member_remove event received for {member} in guild '{member.guild.name}' ({member.guild.id})")
             channel = self.bot.get_channel(kia_channel_id)
+            if channel and getattr(channel, 'guild', None) and channel.guild.id != member.guild.id:
+                channel = None
             if not channel:
                 # Fallback: try a channel named by common names
                 candidate_names = ["kia", "farewell", "goodbye", "general"]

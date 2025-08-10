@@ -16,8 +16,12 @@ class ArrivalCog(commands.Cog):
     async def on_member_join(self, member):
         """Welcomes a new member, assigns a role, and registers them."""
         try:
+            logging.info(f"on_member_join event received for {member} in guild '{member.guild.name}' ({member.guild.id})")
             # Resolve welcome channel with fallbacks
             welcome_channel = self.bot.get_channel(welcome_channel_id)
+            # Use env-configured channel only if it belongs to this guild
+            if welcome_channel and getattr(welcome_channel, 'guild', None) and welcome_channel.guild.id != member.guild.id:
+                welcome_channel = None
             if not welcome_channel:
                 # Try system channel
                 welcome_channel = member.guild.system_channel

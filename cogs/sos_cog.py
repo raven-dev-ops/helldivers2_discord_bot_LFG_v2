@@ -20,10 +20,8 @@ class SOSCog(commands.Cog):
 
     def get_sos_view(self):
         """Returns an instance of the SOSView."""
-        # This assumes SOSView is correctly implemented in cogs.sos_view
-        # and does not require bot instance passed in its __init__
-        # If it does need the bot, you might need to pass self.bot here
-        return SOSView()
+        # Always pass bot to SOSView constructor
+        return SOSView(self.bot)
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -91,8 +89,8 @@ class SOSCog(commands.Cog):
                  # Get view from the cog instance if needed for state/persistence
                 view = sos_view_cog.get_sos_view()
             else:
-                 # Fallback if cog not found, assuming SOSView can be instantiated standalone
-                view = SOSView()
+                 # Fallback if cog not found, instantiate directly with bot
+                view = SOSView(self.bot)
 
 
             # No default parameters
