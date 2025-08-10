@@ -162,7 +162,8 @@ class GuildManagementCog(commands.Cog):
             guild.default_role: discord.PermissionOverwrite(
                 view_channel=True,
                 read_message_history=True,
-                send_messages=False,
+                send_messages=True,
+                attach_files=True,
                 add_reactions=False
             ),
             bot_member: discord.PermissionOverwrite(
