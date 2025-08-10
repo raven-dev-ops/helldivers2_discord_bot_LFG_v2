@@ -236,12 +236,17 @@ class ExtractCog(commands.Cog):
 
     async def submit_stats_button_flow(self, interaction: discord.Interaction):
         """Main entrypoint after pressing the SUBMIT STATS button."""
+        logger.info(
+            f"submit_stats_button_flow invoked by user {interaction.user} (ID: {interaction.user.id}) in guild {getattr(interaction.guild, 'name', 'DM')} ({interaction.guild_id})"
+        )
         if not interaction.guild_id:
+            logger.warning("Attempted to submit stats in DM; disallowed.")
             await interaction.response.send_message("This command cannot be used in DMs.", ephemeral=True)
             return
 
         server_data = await get_server_listing_by_id(interaction.guild_id)
         if not server_data:
+            logger.error(f"Server_Listing not found for guild_id {interaction.guild_id}.")
             await interaction.response.send_message(
                 "Server is not configured. Contact an admin.",
                 ephemeral=True
@@ -250,6 +255,10 @@ class ExtractCog(commands.Cog):
         gpt_stat_access_role_id = server_data.get("gpt_stat_access_role_id")
         monitor_channel_id = server_data.get("monitor_channel_id")
         if not gpt_stat_access_role_id or not monitor_channel_id:
+            logger.error(
+                f"Missing required IDs in Server_Listing for guild_id {interaction.guild_id}: "
+                f"gpt_stat_access_role_id={gpt_stat_access_role_id}, monitor_channel_id={monitor_channel_id}"
+            )
             await interaction.response.send_message(
                 "Server is missing required IDs (role or channel) in the database. Contact an admin.",
                 ephemeral=True
@@ -258,12 +267,16 @@ class ExtractCog(commands.Cog):
 
         role_ids = [r.id for r in getattr(interaction.user, "roles", [])]
         if gpt_stat_access_role_id not in role_ids:
+            logger.warning(
+                f"User {interaction.user} (ID: {interaction.user.id}) missing GPT STAT ACCESS role ({gpt_stat_access_role_id})."
+            )
             await interaction.response.send_message(
                 "You do not have permission to use this feature (missing GPT STAT ACCESS role).",
                 ephemeral=True
             )
             return
 
+        logger.info("Prompting user to upload screenshot...")
         await interaction.response.send_message(
             "Please upload your mission screenshot image **as a reply in this channel** within 60 seconds.",
             ephemeral=True
@@ -280,6 +293,7 @@ class ExtractCog(commands.Cog):
         try:
             msg = await self.bot.wait_for("message", check=check, timeout=60.0)
             image = msg.attachments[0]
+            logger.info(f"Received image '{image.filename}' ({image.size} bytes) from user {interaction.user.id}.")
             img_bytes = await image.read()
             # --- DELETE THE USER MESSAGE ASAP! ---
             try:
@@ -292,6 +306,7 @@ class ExtractCog(commands.Cog):
             img_pil = Image.open(BytesIO(img_bytes))
             img_cv = np.array(img_pil)
             regions = define_regions(img_cv.shape)
+            logger.info("Starting OCR processing in background thread...")
 
             await interaction.followup.send(
                 content="Here is the submitted image for stats extraction:",
@@ -300,14 +315,17 @@ class ExtractCog(commands.Cog):
             )
 
             players_data = await asyncio.to_thread(process_for_ocr, img_cv, regions)
+            logger.info(f"OCR produced {len(players_data)} player entries before cleanup.")
             players_data = [
                 p for p in players_data
                 if p.get('player_name') and str(p.get('player_name')).strip() not in ["", "0", ".", "a"]
             ]
+            logger.info(f"After initial filtering, {len(players_data)} player entries remain.")
             if len(players_data) < 2:
                 await interaction.followup.send("At least 2 players with valid names must be present in the image.", ephemeral=True)
                 return
             registered_users = await get_registered_users()
+            logger.info(f"Loaded {len(registered_users)} registered users for matching.")
             for player in players_data:
                 ocr_name = player.get('player_name')
                 if ocr_name:
@@ -332,6 +350,7 @@ class ExtractCog(commands.Cog):
                         else:
                             player['clan_name'] = "N/A"
                     else:
+                        logger.info(f"No match for OCR name '{ocr_name}'. Marking as unregistered.")
                         player['player_name'] = None
                         player['discord_id'] = None
                         player['discord_server_id'] = None
@@ -342,6 +361,7 @@ class ExtractCog(commands.Cog):
                     player['discord_server_id'] = None
                     player['clan_name'] = "N/A"
             players_data = [p for p in players_data if p.get('player_name')]
+            logger.info(f"After matching against DB, {len(players_data)} registered players remain.")
             if len(players_data) < 2:
                 await interaction.followup.send(
                     "At least 2 registered players must be detected in the image. "
@@ -351,6 +371,7 @@ class ExtractCog(commands.Cog):
                 return
             submitter_user = await get_registered_user_by_discord_id(interaction.user.id)
             submitter_player_name = submitter_user.get('player_name', 'Unknown') if submitter_user else 'Unknown'
+            logger.info(f"Submitter resolved as '{submitter_player_name}'.")
 
             single_embed = build_single_embed(players_data, submitter_player_name)
             shared_data = SharedData(
@@ -370,8 +391,10 @@ class ExtractCog(commands.Cog):
                 ephemeral=True
             )
             shared_data.message = message
+            logger.info("Presented extracted data for confirmation.")
 
         except asyncio.TimeoutError:
+            logger.warning("Timed out waiting for image upload from user.")
             await interaction.followup.send("Timed out waiting for an image. Please try again.", ephemeral=True)
         except Exception as e:
             logger.error(f"Error processing image: {e}")

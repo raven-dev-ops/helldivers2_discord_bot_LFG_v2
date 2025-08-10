@@ -39,19 +39,36 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 MATCH_SCORE_THRESHOLD = int(os.getenv('MATCH_SCORE_THRESHOLD', '50'))  # Lower = more tolerant
 
 # Load environment variables
-mongo_uri = load_env_var('MONGODB_URI')
-discord_token = load_env_var('DISCORD_TOKEN')
-role_to_assign_id = int(load_env_var('ROLE_TO_ASSIGN_ID'))
-welcome_channel_id = int(load_env_var('WELCOME_CHANNEL_ID'))
-monitor_channel_id = int(load_env_var('MONITOR_CHANNEL_ID'))
-leaderboard_channel_id = int(load_env_var('LEADERBOARD_CHANNEL_ID'))
-kia_channel_id = int(load_env_var('KIA_CHANNEL_ID'))
-channel_id = int(load_env_var('BOT_CHANNEL_ID'))
-class_a_role_id = int(load_env_var('CLASS_A_ROLE_ID'))
-guild_id = int(load_env_var('GUILD_ID'))
-sos_network_id = int(load_env_var('SOS_NETWORK_ID'))
-cadet_role_id = int(load_env_var('CADET_ROLE_ID'))
-cadet_chat_id = int(load_env_var('CADET_CHAT_ID'))
+mongo_uri = os.getenv('MONGODB_URI')  # Optional here; main.py enforces
+discord_token = os.getenv('DISCORD_TOKEN')  # Optional here; main.py enforces
+
+# Optional IDs: provide safe defaults to avoid import-time failures.
+# Components that need them should validate at runtime.
+def _get_int_env(var_name: str, default: int | None = None) -> int | None:
+    raw = os.getenv(var_name)
+    if raw is None or raw.strip() == "":
+        if default is None:
+            logging.warning(f"Environment variable '{var_name}' is not set; defaulting to None.")
+            return None
+        logging.warning(f"Environment variable '{var_name}' is not set; defaulting to {default}.")
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logging.warning(f"Environment variable '{var_name}' has non-integer value '{raw}'; defaulting to {default}.")
+        return default
+
+role_to_assign_id = _get_int_env('ROLE_TO_ASSIGN_ID')
+welcome_channel_id = _get_int_env('WELCOME_CHANNEL_ID')
+monitor_channel_id = _get_int_env('MONITOR_CHANNEL_ID')
+leaderboard_channel_id = _get_int_env('LEADERBOARD_CHANNEL_ID')
+kia_channel_id = _get_int_env('KIA_CHANNEL_ID')
+channel_id = _get_int_env('BOT_CHANNEL_ID')
+class_a_role_id = _get_int_env('CLASS_A_ROLE_ID')
+guild_id = _get_int_env('GUILD_ID')
+sos_network_id = _get_int_env('SOS_NETWORK_ID')
+cadet_role_id = _get_int_env('CADET_ROLE_ID')
+cadet_chat_id = _get_int_env('CADET_CHAT_ID')
 
 # Notes:
 # Some cogs (e.g., Extract) fetch server-specific IDs from the database,

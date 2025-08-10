@@ -44,6 +44,15 @@ class RegisterModal(discord.ui.Modal, title="Register as a Helldiver"):
                                 options=options,
                             )
                             self.add_item(self.sos_lfg_role_select)
+                            logging.info(f"Added SOS LFG role select for role '{role.name}' ({role.id}) in guild '{guild.name}'.")
+                        else:
+                            logging.warning(f"Role ID {role_id} not found in guild when preparing registration modal.")
+                    else:
+                        logging.warning("Guild not found when preparing registration modal.")
+                else:
+                    logging.info("No sos_lfg_role_id in Server_Listing; proceeding without role selection.")
+            else:
+                logging.warning("bot.mongo_db not set; registration modal will not include role selection.")
         except Exception as e:
             logging.error(f"Error adding SOS LFG role select: {e}")
 
@@ -58,6 +67,7 @@ class RegisterModal(discord.ui.Modal, title="Register as a Helldiver"):
             server_name = interaction.guild.name
             server_nickname = interaction.user.display_name
             player_name = self.helldiver_name.value
+            logging.info(f"Registering user '{player_name}' (Discord ID: {discord_id}) in guild '{server_name}' ({discord_server_id}).")
 
             # Prepare the document
             player_data = {
@@ -76,6 +86,7 @@ class RegisterModal(discord.ui.Modal, title="Register as a Helldiver"):
                 {"$set": player_data},
                 upsert=True
             )
+            logging.info(f"User '{player_name}' upserted into Alliance collection.")
 
             # Handle role assignment if a role was selected
             selected_role_id = None
@@ -123,6 +134,7 @@ class RegisterModalCog(commands.Cog):
         """
         Returns an instance of RegisterModal.
         """
+        logging.info("Creating RegisterModal for user interaction.")
         return RegisterModal(self.bot, interaction)
 
 async def setup(bot):

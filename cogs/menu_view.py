@@ -38,6 +38,7 @@ class SOSMenuView(discord.ui.View):
                 )
                 logging.error(f"Error in launch_sos_button: {e}")
         else:
+            logging.error("SOSCog not found when pressing CALL SOS. Ensure 'cogs.sos_cog' loaded correctly.")
             await interaction.response.send_message(
                 "The SOS system is not available at the moment. Please try again later.",
                 ephemeral=True
@@ -62,6 +63,7 @@ class SOSMenuView(discord.ui.View):
                 )
                 logging.error(f"Error in create_mission_button: {e}")
         else:
+            logging.error("SOSViewCog not found when pressing MAKE LFG. Ensure 'cogs.sos_view' loaded correctly.")
             await interaction.response.send_message(
                 "The mission creation system is not available at the moment. Please try again later.",
                 ephemeral=True
@@ -81,6 +83,7 @@ class SOSMenuView(discord.ui.View):
                 )
                 logging.error(f"Error in register_button: {e}")
         else:
+            logging.error("RegisterModalCog not found when pressing REGISTER. Ensure 'cogs.register_modal' loaded correctly.")
             await interaction.response.send_message(
                 "The registration system is not available at the moment. Please try again later.",
                 ephemeral=True
@@ -96,6 +99,7 @@ class SOSMenuView(discord.ui.View):
         if extract_cog:
             await extract_cog.submit_stats_button_flow(interaction)
         else:
+            logging.error("ExtractCog not found when pressing SUBMIT STATS. Ensure 'cogs.extract_cog' loaded correctly.")
             await interaction.response.send_message(
                 "The stats submission system is not available at the moment. Please try again later.",
                 ephemeral=True
@@ -143,16 +147,6 @@ class MenuViewCog(commands.Cog):
             if not gpt_channel:
                 logging.warning(f"GPT channel (ID: {gpt_channel_id}) not found in guild '{guild.name}'. Cannot send SOS menu.")
                 return
-
-            # # For each clan, retrieve the invite link from the corresponding server in MongoDB
-            # alliance_link_chunks = []
-            # for clan_name, clan_server_id in CLAN_SERVER_IDS.items():
-            #     clan_server_data = await server_listing.find_one({"discord_server_id": clan_server_id})
-            #     invite_link = "https://discord.gg/unknown" # Default placeholder
-            #     if clan_server_data and "discord_invite_link" in clan_server_data:
-            #         invite_link = clan_server_data["discord_invite_link"]
-            #     else:
-            #         logging.warning(f"No server data or invite link found in DB for clan '{clan_name}' (Server ID: {clan_server_id}). Using placeholder link.")
 
             embed_description = (
                 "**How To Use:**\n\n"
