@@ -54,6 +54,7 @@ async def load_cogs():
         'cogs.sos_cog',
         'cogs.cleanup_cog',
         'cogs.dm_response',
+        'cogs.register_modal',
         'cogs.menu_view',
         'cogs.extract_cog',
     ]
