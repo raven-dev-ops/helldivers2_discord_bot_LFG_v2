@@ -58,7 +58,7 @@ def _get_int_env(var_name: str, default: int | None = None) -> int | None:
         logging.warning(f"Environment variable '{var_name}' has non-integer value '{raw}'; defaulting to {default}.")
         return default
 
-role_to_assign_id = _get_int_env('ROLE_TO_ASSIGN_ID')
+class_b_role_id = _get_int_env('CLASS_B_ROLE_ID')
 welcome_channel_id = _get_int_env('WELCOME_CHANNEL_ID')
 monitor_channel_id = _get_int_env('MONITOR_CHANNEL_ID')
 leaderboard_channel_id = _get_int_env('LEADERBOARD_CHANNEL_ID')
@@ -67,8 +67,6 @@ channel_id = _get_int_env('BOT_CHANNEL_ID')
 class_a_role_id = _get_int_env('CLASS_A_ROLE_ID')
 guild_id = _get_int_env('GUILD_ID')
 sos_network_id = _get_int_env('SOS_NETWORK_ID')
-cadet_role_id = _get_int_env('CADET_ROLE_ID')
-cadet_chat_id = _get_int_env('CADET_CHAT_ID')
 
 # Notes:
 # Some cogs (e.g., Extract) fetch server-specific IDs from the database,

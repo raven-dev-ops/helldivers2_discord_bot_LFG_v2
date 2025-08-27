@@ -214,6 +214,15 @@ async def insert_player_data(players_data: List[Dict[str, Any]], submitted_by: s
         except Exception as e:
             logger.error(f"Failed to insert player data for {doc['player_name']}: {e}")
 
+async def count_user_missions(discord_id: int) -> int:
+    """Count missions completed by a specific Discord user."""
+    try:
+        await get_mongo_client()
+        return await stats_collection.count_documents({"discord_id": str(discord_id)})
+    except Exception as e:
+        logger.error(f"Error counting missions for user {discord_id}: {e}")
+        return 0
+
 ################################################
 # CLAN NAME LOOKUP
 ################################################

@@ -201,38 +201,6 @@ class GuildManagementCog(commands.Cog):
             except Exception as e:
                 logging.error(f"Error creating/finding invite link for '#{gpt_channel_name}': {e}")
 
-        gpt_stat_access_role = discord.utils.get(guild.roles, name="GPT STAT ACCESS")
-        if not gpt_stat_access_role:
-            try:
-                permissions = discord.Permissions.none()
-                permissions.use_application_commands = True
-                gpt_stat_access_role = await guild.create_role(
-                    name="GPT STAT ACCESS",
-                    mentionable=True,
-                    permissions=permissions,
-                    reason="Role for stats access, including slash commands."
-                )
-                logging.info(f"Created role 'GPT STAT ACCESS' (ID: {gpt_stat_access_role.id}) in guild '{guild.name}'.")
-            except Exception as e:
-                logging.error(f"Error creating role 'GPT STAT ACCESS' in guild '{guild.name}': {e}")
-        else:
-            logging.info(f"Role 'GPT STAT ACCESS' (ID: {gpt_stat_access_role.id}) already exists in guild '{guild.name}'.")
-            try:
-                current_perms = gpt_stat_access_role.permissions
-                if not current_perms.use_application_commands:
-                    updated_perms = discord.Permissions(current_perms.value)
-                    updated_perms.use_application_commands = True
-                    await gpt_stat_access_role.edit(
-                        permissions=updated_perms,
-                        reason="Enabling slash commands for GPT STAT ACCESS role"
-                    )
-                    logging.info(
-                        f"Updated GPT STAT ACCESS role (ID: {gpt_stat_access_role.id}) to allow use of slash commands in guild "
-                        f"'{guild.name}'."
-                    )
-            except Exception as e:
-                logging.error(f"Failed to set use_application_commands for GPT STAT ACCESS role (ID: {gpt_stat_access_role.id}) in guild '{guild.name}': {e}")
-
         sos_lfg_role = discord.utils.get(guild.roles, name=sos_lfg_role_name)
         if not sos_lfg_role:
             try:
@@ -270,13 +238,6 @@ class GuildManagementCog(commands.Cog):
                 read_message_history=True
             )
         }
-        if gpt_stat_access_role:
-            monitor_overwrites[gpt_stat_access_role] = discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=False,
-                add_reactions=False,
-                read_message_history=True
-            )
         if sos_lfg_role:
             monitor_overwrites[sos_lfg_role] = discord.PermissionOverwrite(
                 view_channel=False
@@ -331,7 +292,6 @@ class GuildManagementCog(commands.Cog):
             "category_id": category.id if category else None,
             "gpt_channel_id": gpt_channel.id if gpt_channel else None,
             "discord_invite_link": discord_invite_link,
-            "gpt_stat_access_role_id": gpt_stat_access_role.id if gpt_stat_access_role else None,
             "sos_lfg_role_id": sos_lfg_role.id if sos_lfg_role else None,
             "monitor_channel_id": monitor_channel.id if monitor_channel else None,
             "leaderboard_channel_id": leaderboard_channel.id if leaderboard_channel else None,

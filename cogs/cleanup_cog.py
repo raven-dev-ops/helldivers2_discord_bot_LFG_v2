@@ -21,6 +21,18 @@ class CleanupCog(commands.Cog):
         self.sos_cog = None
         self.guild_management_cog = None
 
+    async def _prune_stale_guild(self, server_listing, guild_id, context: str = ""):
+        """Remove entries for guilds the bot has left."""
+        try:
+            await server_listing.delete_one({"discord_server_id": guild_id})
+            logging.info(
+                f"Pruned stale Server_Listing entry for missing guild ID {guild_id}{context}."
+            )
+        except Exception as e:
+            logging.error(
+                f"Failed to prune stale Server_Listing entry for guild ID {guild_id}{context}: {e}"
+            )
+
     @commands.Cog.listener()
     async def on_ready(self):
         logging.info("CleanupCog is ready.")
@@ -65,13 +77,7 @@ class CleanupCog(commands.Cog):
             guild_id = server_data.get("discord_server_id")
             guild = self.bot.get_guild(guild_id)
             if not guild:
-                try:
-                    # Prune stale server listing entries for guilds the bot is no longer in
-                    server_listing = self.bot.mongo_db['Server_Listing']
-                    await server_listing.delete_one({"discord_server_id": guild_id})
-                    logging.info(f"Pruned stale Server_Listing entry for missing guild ID {guild_id}.")
-                except Exception as e:
-                    logging.error(f"Failed to prune stale Server_Listing entry for guild ID {guild_id}: {e}")
+                await self._prune_stale_guild(server_listing, guild_id)
                 continue
 
             gpt_channel_id = server_data.get("gpt_channel_id")
@@ -101,13 +107,7 @@ class CleanupCog(commands.Cog):
 
             guild = self.bot.get_guild(guild_id)
             if not guild:
-                try:
-                    # Prune stale server listing entries for guilds the bot is no longer in
-                    server_listing = self.bot.mongo_db['Server_Listing']
-                    await server_listing.delete_one({"discord_server_id": guild_id})
-                    logging.info(f"Pruned stale Server_Listing entry for missing guild ID {guild_id} during startup cleanup.")
-                except Exception as e:
-                    logging.error(f"Failed to prune stale Server_Listing entry for guild ID {guild_id} during startup cleanup: {e}")
+                await self._prune_stale_guild(server_listing, guild_id, " during startup cleanup")
                 continue
 
             # 1) Remove leftover 'SOS QRF#' channels that are empty

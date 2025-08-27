@@ -17,18 +17,48 @@ from .extract_helpers import (
 from database import (
     get_registered_users,
     insert_player_data,
+    count_user_missions,
     find_best_match,
     get_registered_user_by_discord_id,
     get_clan_name_by_discord_server_id,
     get_server_listing_by_id
 )
 from config import (
-    ALLOWED_EXTENSIONS, MATCH_SCORE_THRESHOLD
+    ALLOWED_EXTENSIONS,
+    MATCH_SCORE_THRESHOLD,
+    class_a_role_id,
 )
 from ocr_processing import process_for_ocr, clean_ocr_result
 from boundary_drawing import define_regions
 
 logger = logging.getLogger(__name__)
+
+
+async def maybe_promote(bot: commands.Bot, player: dict):
+    """Grant Class A role if the player has 3 or more missions."""
+    try:
+        discord_id = player.get("discord_id")
+        guild_id = player.get("discord_server_id")
+        if not discord_id or not guild_id:
+            return
+        guild = bot.get_guild(int(guild_id))
+        if not guild:
+            return
+        member = guild.get_member(int(discord_id))
+        if not member:
+            try:
+                member = await guild.fetch_member(int(discord_id))
+            except Exception:
+                return
+        if any(r.id == class_a_role_id for r in member.roles):
+            return
+        completed = await count_user_missions(int(discord_id))
+        if completed >= 3:
+            role = guild.get_role(class_a_role_id)
+            if role:
+                await member.add_roles(role, reason="Completed 3 missions")
+    except Exception as e:
+        logger.error(f"Error during promotion check: {e}")
 
 # --- Shared Data & Views ---
 class SharedData:
@@ -64,6 +94,8 @@ class ConfirmationView(discord.ui.View):
                 )
                 return
             await insert_player_data(self.shared_data.players_data, self.shared_data.submitter_player_name)
+            for player in self.shared_data.players_data:
+                await maybe_promote(self.bot, player)
             monitor_embed = build_monitor_embed(
                 self.shared_data.players_data, self.shared_data.submitter_player_name
             )
@@ -252,26 +284,33 @@ class ExtractCog(commands.Cog):
                 ephemeral=True
             )
             return
-        gpt_stat_access_role_id = server_data.get("gpt_stat_access_role_id")
+
         monitor_channel_id = server_data.get("monitor_channel_id")
-        if not gpt_stat_access_role_id or not monitor_channel_id:
+        if not monitor_channel_id:
             logger.error(
-                f"Missing required IDs in Server_Listing for guild_id {interaction.guild_id}: "
-                f"gpt_stat_access_role_id={gpt_stat_access_role_id}, monitor_channel_id={monitor_channel_id}"
+                f"Missing monitor_channel_id in Server_Listing for guild_id {interaction.guild_id}."
             )
             await interaction.response.send_message(
-                "Server is missing required IDs (role or channel) in the database. Contact an admin.",
+                "Server is missing required channel configuration in the database. Contact an admin.",
+                ephemeral=True
+            )
+            return
+
+        if class_a_role_id is None:
+            logger.error("class_a_role_id is not configured.")
+            await interaction.response.send_message(
+                "Class A Citizen role is not configured. Contact an admin.",
                 ephemeral=True
             )
             return
 
         role_ids = [r.id for r in getattr(interaction.user, "roles", [])]
-        if gpt_stat_access_role_id not in role_ids:
+        if class_a_role_id not in role_ids:
             logger.warning(
-                f"User {interaction.user} (ID: {interaction.user.id}) missing GPT STAT ACCESS role ({gpt_stat_access_role_id})."
+                f"User {interaction.user} (ID: {interaction.user.id}) missing Class A Citizen role ({class_a_role_id})."
             )
             await interaction.response.send_message(
-                "You do not have permission to use this feature (missing GPT STAT ACCESS role).",
+                "You must be a Class A Citizen to submit stats.",
                 ephemeral=True
             )
             return

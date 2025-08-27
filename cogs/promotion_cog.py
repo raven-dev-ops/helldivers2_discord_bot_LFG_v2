@@ -1,6 +1,6 @@
 from discord.ext import commands
 import logging
-from config import cadet_role_id, cadet_chat_id, class_a_role_id, welcome_channel_id
+from config import class_a_role_id, welcome_channel_id
 from database import get_mongo_client
 
 class PromotionCog(commands.Cog):
@@ -23,11 +23,6 @@ class PromotionCog(commands.Cog):
         """Handles promotions when a specific role is assigned."""
         try:
             logging.info(f"handle_role_assignment triggered for {member.display_name} with role ID: {role.id}")
-            # Use variables directly from database.py
-            if role.id == cadet_role_id:
-                cadet_chat = self.bot.get_channel(cadet_chat_id)
-                if cadet_chat:
-                    await cadet_chat.send(f"Welcome to the Cadet chat, {member.mention}! Please review the pinned messages.")
 
             if role.id == class_a_role_id:
                 completed_missions = await self.get_completed_missions(member)
@@ -50,7 +45,7 @@ class PromotionCog(commands.Cog):
             mongo_client = await get_mongo_client()
             db = mongo_client['GPTHellbot']
             stats_collection = db['User_Stats']
-            count = await stats_collection.count_documents({"discord_id": member.id})
+            count = await stats_collection.count_documents({"discord_id": str(member.id)})
             return count
         except Exception as e:
             logging.error(f"Error fetching completed missions: {e}")

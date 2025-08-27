@@ -1,14 +1,10 @@
-import os
 import discord
 from discord.ext import commands
 import logging
 from database import get_mongo_client
-from config import welcome_channel_id, role_to_assign_id, sos_network_id
+from config import welcome_channel_id, class_b_role_id, guild_id
 from utils import log_to_monitor_channel
 from datetime import datetime
-
-# Read once at import time (keeps your main clean)
-FLEET_GUILD_ID = int(os.getenv("FLEET_GUILD_ID", "0") or 0)
 
 class ArrivalCog(commands.Cog):
     def __init__(self, bot):
@@ -18,8 +14,8 @@ class ArrivalCog(commands.Cog):
     async def on_member_join(self, member: discord.Member):
         """Welcomes a new member, assigns a role, and registers them."""
         try:
-            # Restrict welcomes to GPT FLEET only
-            if not FLEET_GUILD_ID or member.guild.id != FLEET_GUILD_ID:
+            # Restrict welcomes to the configured guild only
+            if not guild_id or member.guild.id != guild_id:
                 return
 
             # IMPORTANT: fetch the channel from the SAME guild
@@ -41,14 +37,14 @@ class ArrivalCog(commands.Cog):
                 )
             )
 
-            # Assign the role (role must exist in GPT FLEET)
-            role = member.guild.get_role(role_to_assign_id)
+            # Assign the Class B Citizen role
+            role = member.guild.get_role(class_b_role_id)
             if role:
                 await member.add_roles(role, reason="Auto-welcome role assignment")
                 logging.info(f"[ArrivalCog] Assigned role '{role.name}' to {member.display_name}.")
             else:
                 logging.error(
-                    f"[ArrivalCog] Role {role_to_assign_id} not found in guild {member.guild.id}."
+                    f"[ArrivalCog] Role {class_b_role_id} not found in guild {member.guild.id}."
                 )
                 return  # Stop if role not found
 
