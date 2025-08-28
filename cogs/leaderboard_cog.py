@@ -251,7 +251,7 @@ class LeaderboardCog(commands.Cog):
             )
             if num_pages > 1:
                 embed.title += f" (Page {i+1}/{num_pages})"
-            embed.set_footer(text=f"Updated every 12 hours. New Yearly, Monthly, Weekly, Daily, and Solo Leadboards coming soon.")
+            embed.set_footer(text=f"Coming soon: Yearly, Monthly, Weekly, Daily, and Solo Leadboards via website!")
 
             if image_path and i == 0:
                 embed.set_image(url=f"attachment://{os.path.basename(image_path)}")
