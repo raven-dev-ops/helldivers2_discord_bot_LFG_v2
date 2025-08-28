@@ -87,10 +87,8 @@ class LeaderboardCog(commands.Cog):
                                 pass
                 # Post leaderboard
                 if not embeds:
-                    now = datetime.utcnow()
-                    month_str = now.strftime("%B").upper()
                     embed = discord.Embed(
-                        title=f"**GPT {month_str} {now.year} LEADERBOARD**",
+                        title="GPTF TOTAL KILL LEADERBOARD (August 2025) [Migrating to website August 30th]",
                         description="No leaderboard data available.",
                         color=discord.Color.blue()
                     )
@@ -240,13 +238,11 @@ class LeaderboardCog(commands.Cog):
         if not leaderboard_data:
             return [], image_path
 
-        now = datetime.utcnow()
-        month_str = now.strftime("%B").upper()
         num_pages = (len(leaderboard_data) + batch_size - 1) // batch_size
         for i in range(num_pages):
             batch = leaderboard_data[i*batch_size:(i+1)*batch_size]
             embed = discord.Embed(
-                title=f"**{month_str} {now.year} GALACTIC HELLDIVER LEADERBOARD**\n*({focus_title})*",
+                title="GPTF TOTAL KILL LEADERBOARD (August 2025) [Migrating to website August 30th]",
                 color=discord.Color.blurple()
             )
             if num_pages > 1:
@@ -257,12 +253,6 @@ class LeaderboardCog(commands.Cog):
                 embed.set_image(url=f"attachment://{os.path.basename(image_path)}")
 
             for idx, player in enumerate(batch, start=i*batch_size + 1):
-                if idx == 1:
-                    rank_emoji = "🥇 "
-                elif idx == 2:
-                    rank_emoji = "🥈 "
-                elif idx == 3:
-                    rank_emoji = "🥉 "
                 name = (player['player_name'][:22] + "...") if len(player['player_name']) > 25 else player['player_name']
                 stat_val = player[stat_key]
                 if stat_key == "average_accuracy":
@@ -274,7 +264,7 @@ class LeaderboardCog(commands.Cog):
                 else:
                     stat_val_str = f"{stat_val}"
                 embed.add_field(
-                    name=f"{rank_emoji}#{idx}. {name}",
+                    name=f"#{idx}. {name}",
                     value=(
                         f"**Clan:** {player['Clan']}\n"
                         f"**{focus_title}:** {stat_val_str}\n"
