@@ -31,7 +31,7 @@ class PromotionCog(commands.Cog):
                     welcome_channel = self.bot.get_channel(welcome_channel_id)
                     if welcome_channel:
                         await welcome_channel.send(
-                            f"🎉 Congratulations {member.mention}! You have achieved **Class A Citizen** status by completing {completed_missions} missions! 🎉"
+                            f"Attention to orders: Helldiver {member.mention} has achieved **Class A Citizen**!"
 
                         )
                         logging.info(f"Announced promotion for {member.display_name} in the welcome channel.")
