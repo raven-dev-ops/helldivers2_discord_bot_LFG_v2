@@ -6,6 +6,7 @@ import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from collections import defaultdict
 from datetime import datetime
+from config import class_a_role_id
 
 CATEGORY_NAME = "GPT NETWORK"
 LEADERBOARD_CHANNEL_NAME = "❗｜leaderboard"
@@ -69,6 +70,7 @@ class LeaderboardCog(commands.Cog):
         async with self.leaderboard_lock:
             title, stat_key = get_current_focus()
             leaderboard_data = await self.calculate_leaderboard_data(stat_key)
+            await self.promote_class_a_citizens(leaderboard_data)
             embeds, image_path = await self.build_leaderboard_embeds(leaderboard_data, title, stat_key)
             for guild in self.bot.guilds:
                 channel = await self.ensure_leaderboard_channel(guild)
@@ -103,6 +105,31 @@ class LeaderboardCog(commands.Cog):
                             file = discord.File(image_path, filename=os.path.basename(image_path))
                         await channel.send(embed=embed, file=file if file else discord.utils.MISSING)
                         await asyncio.sleep(1.1)
+
+    async def promote_class_a_citizens(self, leaderboard_data):
+        """Assign Class A Citizen role to players with >=3 games."""
+        if class_a_role_id is None:
+            return
+        for entry in leaderboard_data:
+            if entry.get("games_played", 0) < 3:
+                continue
+            discord_id = entry.get("discord_id")
+            server_id = entry.get("discord_server_id")
+            if not discord_id or not server_id:
+                continue
+            guild = self.bot.get_guild(int(server_id))
+            if not guild:
+                continue
+            member = guild.get_member(int(discord_id))
+            if not member:
+                continue
+            role = guild.get_role(class_a_role_id)
+            if not role or role in member.roles:
+                continue
+            try:
+                await member.add_roles(role, reason="Reached 3 games on leaderboard")
+            except Exception as e:
+                logger.error(f"Failed to assign Class A role to {discord_id}: {e}")
 
     async def ensure_leaderboard_channel(self, guild: discord.Guild):
         # Try to get channel
@@ -147,7 +174,7 @@ class LeaderboardCog(commands.Cog):
             server_map = {str(s['discord_server_id']): s['server_name'] for s in servers if 'discord_server_id' in s and 'server_name' in s}
             players = defaultdict(lambda: {
                 "melee_kills": 0, "kills": 0, "deaths": 0, "shots_fired": 0, "shots_hit": 0,
-                "games_played": 0, "Clan": "Unknown Clan"
+                "games_played": 0, "Clan": "Unknown Clan", "discord_id": None, "discord_server_id": None
             })
             all_stats = await stats_collection.find({}).to_list(None)
             for doc in all_stats:
@@ -168,9 +195,15 @@ class LeaderboardCog(commands.Cog):
                 players[name]["shots_fired"] += shots_fired
                 players[name]["shots_hit"] += shots_hit
                 players[name]["games_played"] += 1
-                server_id = str(doc.get('discord_server_id', ''))
-                if server_id in server_map:
-                    players[name]["Clan"] = server_map[server_id]
+                discord_id = doc.get('discord_id')
+                if discord_id and players[name].get("discord_id") is None:
+                    players[name]["discord_id"] = str(discord_id)
+                server_id = doc.get('discord_server_id')
+                if server_id is not None:
+                    players[name]["discord_server_id"] = int(server_id)
+                    server_id_str = str(server_id)
+                    if server_id_str in server_map:
+                        players[name]["Clan"] = server_map[server_id_str]
             leaderboard = []
             for name, d in players.items():
                 average_kills = d["kills"] / d["games_played"] if d["games_played"] else 0.0
@@ -187,6 +220,8 @@ class LeaderboardCog(commands.Cog):
                     "average_kills": average_kills,
                     "average_accuracy": average_accuracy,
                     "least_deaths": -d["deaths"],  # Negative for sorting (least at top)
+                    "discord_id": d.get("discord_id"),
+                    "discord_server_id": d.get("discord_server_id"),
                 })
             if stat_key == "least_deaths":
                 leaderboard.sort(key=lambda x: (x[stat_key], -x["games_played"]))  # fewest deaths, most games

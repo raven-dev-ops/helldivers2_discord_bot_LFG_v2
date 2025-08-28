@@ -1,1 +1,1 @@
-worker: /bin/sh -c "python main.py"
+worker: /bin/sh -c "pytest && python main.py"
