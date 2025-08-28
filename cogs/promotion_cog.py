@@ -45,7 +45,12 @@ class PromotionCog(commands.Cog):
             mongo_client = await get_mongo_client()
             db = mongo_client['GPTHellbot']
             stats_collection = db['User_Stats']
-            count = await stats_collection.count_documents({"discord_id": str(member.id)})
+            count = await stats_collection.count_documents({
+                "$or": [
+                    {"discord_id": str(member.id)},
+                    {"discord_id": member.id},
+                ]
+            })
             return count
         except Exception as e:
             logging.error(f"Error fetching completed missions: {e}")

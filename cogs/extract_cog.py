@@ -96,6 +96,9 @@ class ConfirmationView(discord.ui.View):
             await insert_player_data(self.shared_data.players_data, self.shared_data.submitter_player_name)
             for player in self.shared_data.players_data:
                 await maybe_promote(self.bot, player)
+            leaderboard_cog = self.bot.get_cog("LeaderboardCog")
+            if leaderboard_cog:
+                asyncio.create_task(leaderboard_cog._run_leaderboard_update(force=True))
             monitor_embed = build_monitor_embed(
                 self.shared_data.players_data, self.shared_data.submitter_player_name
             )

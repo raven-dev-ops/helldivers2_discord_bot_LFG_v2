@@ -202,7 +202,7 @@ async def insert_player_data(players_data: List[Dict[str, Any]], submitted_by: s
             "Shots Hit": player.get("Shots Hit", "N/A"),
             "Deaths": player.get("Deaths", "N/A"),
             "Melee Kills": player.get("Melee Kills", "N/A"),
-            "discord_id": player.get("discord_id", None),
+            "discord_id": str(player.get("discord_id")) if player.get("discord_id") is not None else None,
             "discord_server_id": player.get("discord_server_id", None),
             "clan_name": player.get("clan_name", "N/A"),
             "submitted_by": submitted_by,
@@ -218,7 +218,12 @@ async def count_user_missions(discord_id: int) -> int:
     """Count missions completed by a specific Discord user."""
     try:
         await get_mongo_client()
-        return await stats_collection.count_documents({"discord_id": str(discord_id)})
+        return await stats_collection.count_documents({
+            "$or": [
+                {"discord_id": str(discord_id)},
+                {"discord_id": discord_id},
+            ]
+        })
     except Exception as e:
         logger.error(f"Error counting missions for user {discord_id}: {e}")
         return 0
