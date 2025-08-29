@@ -53,7 +53,6 @@ def build_single_embed(players_data: list, submitter_player_name: str) -> discor
         melee_kills = str(player.get('Melee Kills', 'N/A'))
         player_info = (
             f"**Name**: {player_name}\n"
-            f"**Clan**: {clan_name}\n"
             f"**Kills**: {kills}\n"
             f"**Deaths**: {deaths}\n"
             f"**Shots Fired**: {shots_fired}\n"
