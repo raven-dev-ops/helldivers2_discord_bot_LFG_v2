@@ -77,7 +77,7 @@ class GuildManagementCog(commands.Cog):
         category_name = "GPT FEATURES"
         gpt_channel_name = "❗｜clan-menu"
         monitor_channel_name = "❗｜stat-reports"
-        leaderboard_channel_name = "❗｜mvp-leaderboard"
+        leaderboard_channel_name = "❗｜leaderboard"
         sos_lfg_role_name = "LFG PING!"
         sos_lfg_role_color = 0xfaee10
 
