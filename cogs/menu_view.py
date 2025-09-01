@@ -90,7 +90,7 @@ class SOSMenuView(discord.ui.View):
             )
 
     @discord.ui.button(
-        label="REPORT STATS",
+        label="SUBMIT STATS",
         style=discord.ButtonStyle.primary,
         custom_id="submit_stats_button"
     )
