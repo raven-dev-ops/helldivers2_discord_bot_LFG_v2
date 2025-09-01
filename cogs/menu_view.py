@@ -23,51 +23,51 @@ class SOSMenuView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
 
-    @discord.ui.button(label="CALL SOS", style=discord.ButtonStyle.danger, custom_id="launch_sos_button", disabled=False)
-    async def launch_sos_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        sos_cog = self.bot.get_cog("SOSCog")
-        if sos_cog:
-            if not interaction.response.is_done():
-                await interaction.response.defer(ephemeral=True)
-            try:
-                await sos_cog.launch_sos(interaction)
-            except Exception as e:
-                await interaction.followup.send(
-                    "An error occurred while launching SOS. Please try again later.",
-                    ephemeral=True
-                )
-                logging.error(f"Error in launch_sos_button: {e}")
-        else:
-            logging.error("SOSCog not found when pressing CALL SOS. Ensure 'cogs.sos_cog' loaded correctly.")
-            await interaction.response.send_message(
-                "The SOS system is not available at the moment. Please try again later.",
-                ephemeral=True
-            )
+    #@discord.ui.button(label="CALL SOS", style=discord.ButtonStyle.danger, custom_id="launch_sos_button", disabled=False)
+    #async def launch_sos_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    #    sos_cog = self.bot.get_cog("SOSCog")
+    #    if sos_cog:
+    #       if not interaction.response.is_done():
+    #            await interaction.response.defer(ephemeral=True)
+    #        try:
+    #            await sos_cog.launch_sos(interaction)
+    #        except Exception as e:
+    #            await interaction.followup.send(
+    #                "An error occurred while launching SOS. Please try again later.",
+    #                ephemeral=True
+    #            )
+    #            logging.error(f"Error in launch_sos_button: {e}")
+    #    else:
+    #        logging.error("SOSCog not found when pressing CALL SOS. Ensure 'cogs.sos_cog' loaded correctly.")
+    #        await interaction.response.send_message(
+    #            "The SOS system is not available at the moment. Please try again later.",
+    #            ephemeral=True
+    #        )
 
-    @discord.ui.button(label="MAKE LFG", style=discord.ButtonStyle.success, custom_id="create_mission_button")
-    async def create_mission_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        sos_view_cog = self.bot.get_cog("SOSViewCog")
-        if sos_view_cog:
-            await interaction.response.defer(ephemeral=True)
-            try:
-                view = sos_view_cog.get_sos_view()
-                await interaction.followup.send(
-                    "Let's start creating your SOS mission. Please select your options below:",
-                    view=view,
-                    ephemeral=True
-                )
-            except Exception as e:
-                await interaction.followup.send(
-                    "An error occurred while creating the mission. Please try again later.",
-                    ephemeral=True
-                )
-                logging.error(f"Error in create_mission_button: {e}")
-        else:
-            logging.error("SOSViewCog not found when pressing MAKE LFG. Ensure 'cogs.sos_view' loaded correctly.")
-            await interaction.response.send_message(
-                "The mission creation system is not available at the moment. Please try again later.",
-                ephemeral=True
-            )
+    #@discord.ui.button(label="MAKE LFG", style=discord.ButtonStyle.success, custom_id="create_mission_button")
+    #async def create_mission_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    #    sos_view_cog = self.bot.get_cog("SOSViewCog")
+    #    if sos_view_cog:
+    #        await interaction.response.defer(ephemeral=True)
+    #        try:
+    #            view = sos_view_cog.get_sos_view()
+    #            await interaction.followup.send(
+    #                "Let's start creating your SOS mission. Please select your options below:",
+    #                view=view,
+    #                ephemeral=True
+    #            )
+    #        except Exception as e:
+    #            await interaction.followup.send(
+    #                "An error occurred while creating the mission. Please try again later.",
+    #                ephemeral=True
+    #            )
+    #            logging.error(f"Error in create_mission_button: {e}")
+    #    else:
+    #        logging.error("SOSViewCog not found when pressing MAKE LFG. Ensure 'cogs.sos_view' loaded correctly.")
+    #        await interaction.response.send_message(
+    #            "The mission creation system is not available at the moment. Please try again later.",
+    #            ephemeral=True
+    #        )
 
     @discord.ui.button(label="REGISTER", style=discord.ButtonStyle.primary, custom_id="register_button")
     async def register_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -149,9 +149,9 @@ class MenuViewCog(commands.Cog):
                 return
 
             embed_description = (
-                "- **CALL SOS**: Quickly send an SOS for any missions. (touchscreens)\n\n"
-                "- **MAKE LFG**: Customize your SOS mission by selecting various options"
-                "(Enemy Type, Difficulty, Play Style, Voice Comms, Details).\n\n"
+                #"- **CALL SOS**: Quickly send an SOS for any missions. (touchscreens)\n\n"
+                #"- **MAKE LFG**: Customize your SOS mission by selecting various options"
+                #"(Enemy Type, Difficulty, Play Style, Voice Comms, Details).\n\n"
                 "- **REGISTER**: Register your Helldivers 2 player name.\n\n"
                 "- **REPORT STATS**: Submit your screenshots for mission stats to the database.\n\n"
                 "\n"
@@ -159,7 +159,7 @@ class MenuViewCog(commands.Cog):
             )
 
             embed = discord.Embed(
-                title="GPTF HD2 LFG & SOS NETWORK",
+                title="GPTFLEET HD2 CLAN MENU",
                 description=embed_description,
                 color=discord.Color.blue()
             )

@@ -242,7 +242,7 @@ class LeaderboardCog(commands.Cog):
         for i in range(num_pages):
             batch = leaderboard_data[i*batch_size:(i+1)*batch_size]
             embed = discord.Embed(
-                title="GPTF TOTAL KILL LEADERBOARD (August 2025) [Migrating to website August 30th]",
+                title="MONTHLY TOTAL KILL LEADERBOARD (August 2025)",
                 color=discord.Color.blurple()
             )
             if num_pages > 1:
