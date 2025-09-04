@@ -162,8 +162,8 @@ class MenuViewCog(commands.Cog):
             try:
                 if os.path.exists(IMAGE_PATH):
                     file = discord.File(IMAGE_PATH, filename="gpt_network.png")
-                    embed.set_thumbnail(url="attachment://gpt_network.png")
-                    logging.debug(f"Image '{IMAGE_PATH}' prepared for embed as thumbnail.")
+                    embed.set_image(url="attachment://gpt_network.png")
+                    logging.debug(f"Image '{IMAGE_PATH}' prepared for embed as image.")
                 else:
                     logging.warning(f"Image file not found at path: {IMAGE_PATH}. Cannot embed image.")
             except Exception as e:

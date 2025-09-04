@@ -5,7 +5,7 @@ from discord.ext import commands, tasks
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from config import class_a_role_id
 
 CATEGORY_NAME = "GPT NETWORK"
@@ -67,10 +67,11 @@ class LeaderboardCog(commands.Cog):
             logger.info("Forced leaderboard update requested.")
         async with self.leaderboard_lock:
             focus_title, stat_key = get_current_focus()
-            month_name = datetime.utcnow().strftime("%B %Y")
+            now = datetime.utcnow()
+            month_name = now.strftime("%B %Y")
             title = f"MONTHLY {focus_title.upper()} LEADERBOARD ({month_name})"
             
-            leaderboard_data = await self.calculate_leaderboard_data(stat_key)
+            leaderboard_data = await self.calculate_leaderboard_data(stat_key, now.year, now.month)
             await self.promote_class_a_citizens(leaderboard_data)
             embeds, image_path = await self.build_leaderboard_embeds(leaderboard_data, title, stat_key)
             for guild in self.bot.guilds:
@@ -161,7 +162,7 @@ class LeaderboardCog(commands.Cog):
                 logger.info(f"Updated overwrites for leaderboard channel in guild {guild.name} ({guild.id})")
         return channel
 
-    async def calculate_leaderboard_data(self, stat_key):
+    async def calculate_leaderboard_data(self, stat_key, year, month):
         mongo_uri = os.getenv('MONGODB_URI')
         if not mongo_uri:
             return []
@@ -169,13 +170,31 @@ class LeaderboardCog(commands.Cog):
             db = self.bot.mongo_db if hasattr(self.bot, 'mongo_db') else AsyncIOMotorClient(mongo_uri)['GPTHellbot']
             stats_collection = db['User_Stats']
             alliance_collection = db['Alliance']
+            
+            # Define the date range for the given month
+            start_of_month = datetime(year, month, 1)
+            if month == 12:
+                end_of_month = datetime(year + 1, 1, 1)
+            else:
+                end_of_month = datetime(year, month + 1, 1)
+            
+            query = {
+                "submitted_at": {
+                    "$gte": start_of_month,
+                    "$lt": end_of_month
+                }
+            }
+
             servers = await alliance_collection.find({}, {"discord_server_id": 1, "server_name": 1}).to_list(None)
             server_map = {str(s['discord_server_id']): s['server_name'] for s in servers if 'discord_server_id' in s and 'server_name' in s}
+            
             players = defaultdict(lambda: {
                 "melee_kills": 0, "kills": 0, "deaths": 0, "shots_fired": 0, "shots_hit": 0,
                 "games_played": 0, "Clan": "Unknown Clan", "discord_id": None, "discord_server_id": None
             })
-            all_stats = await stats_collection.find({}).to_list(None)
+            
+            all_stats = await stats_collection.find(query).to_list(None)
+            
             for doc in all_stats:
                 name = doc.get('player_name')
                 if not name:
@@ -188,21 +207,25 @@ class LeaderboardCog(commands.Cog):
                     shots_hit = int(doc.get('Shots Hit', 0) or 0)
                 except Exception:
                     melee = kills = deaths = shots_fired = shots_hit = 0
+                
                 players[name]["melee_kills"] += melee
                 players[name]["kills"] += kills
                 players[name]["deaths"] += deaths
                 players[name]["shots_fired"] += shots_fired
                 players[name]["shots_hit"] += shots_hit
                 players[name]["games_played"] += 1
+                
                 discord_id = doc.get('discord_id')
                 if discord_id and players[name].get("discord_id") is None:
                     players[name]["discord_id"] = str(discord_id)
+                
                 server_id = doc.get('discord_server_id')
                 if server_id is not None:
                     players[name]["discord_server_id"] = int(server_id)
                     server_id_str = str(server_id)
                     if server_id_str in server_map:
                         players[name]["Clan"] = server_map[server_id_str]
+
             leaderboard = []
             for name, d in players.items():
                 average_kills = d["kills"] / d["games_played"] if d["games_played"] else 0.0
@@ -222,10 +245,12 @@ class LeaderboardCog(commands.Cog):
                     "discord_id": d.get("discord_id"),
                     "discord_server_id": d.get("discord_server_id"),
                 })
+
             if stat_key == "least_deaths":
                 leaderboard.sort(key=lambda x: (x[stat_key], -x["games_played"]))  # fewest deaths, most games
             else:
                 leaderboard.sort(key=lambda x: (-x[stat_key], -x["games_played"]))
+            
             return leaderboard
         except Exception as e:
             logger.error(f"Error fetching leaderboard: {e}")
