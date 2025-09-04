@@ -17,6 +17,7 @@ class CleanupCog(commands.Cog):
         self.bot = bot
         self.sos_cog = None
         self.guild_management_cog = None
+        self.menu_view_cog = None
 
     async def _prune_stale_guild(self, server_listing, guild_id, context: str = ""):
         """Remove entries for guilds the bot has left."""
@@ -39,19 +40,20 @@ class CleanupCog(commands.Cog):
             return
         self.bot.cleanup_setup_done = True
 
-        # Wait for SOSCog and GuildManagementCog to be loaded (max 5 seconds)
+        # Wait for SOSCog, GuildManagementCog and MenuViewCog to be loaded (max 5 seconds)
         retries = 5
         for attempt in range(retries):
             self.sos_cog = self.bot.get_cog("SOSCog")
             self.guild_management_cog = self.bot.get_cog("GuildManagementCog")
-            if self.sos_cog and self.guild_management_cog:
+            self.menu_view_cog = self.bot.get_cog("MenuViewCog")
+            if self.sos_cog and self.guild_management_cog and self.menu_view_cog:
                 break
-            logging.info(f"CleanupCog waiting for SOSCog and GuildManagementCog... ({attempt+1}/{retries})")
+            logging.info(f"CleanupCog waiting for SOSCog, GuildManagementCog and MenuViewCog... ({attempt+1}/{retries})")
             await asyncio.sleep(1)
 
         # Final check
-        if not self.sos_cog or not self.guild_management_cog:
-            logging.warning("SOSCog or GuildManagementCog not loaded after waiting. CleanupCog cannot function properly.")
+        if not self.sos_cog or not self.guild_management_cog or not self.menu_view_cog:
+            logging.warning("SOSCog, GuildManagementCog or MenuViewCog not loaded after waiting. CleanupCog cannot function properly.")
             return
 
         # Start the periodic cleanup if not already running
@@ -132,6 +134,7 @@ class CleanupCog(commands.Cog):
         Deletes old SOS 'activated' messages and old 'menu view' 
         messages from the specified GPT channel.
         """
+        recreated_menu = False
         try:
             async for message in gpt_channel.history(limit=100):
                 if message.author == self.bot.user and message.embeds:
@@ -142,6 +145,11 @@ class CleanupCog(commands.Cog):
                     elif embed.title in MENU_VIEW_TITLES:
                         logging.info(f"Deleting old menu view message in '{guild.name}' (Message ID: {message.id}).")
                         await message.delete()
+                        if not recreated_menu:
+                            if self.menu_view_cog:
+                                logging.info(f"Recreating menu view in '{guild.name}'.")
+                                await self.menu_view_cog.send_sos_menu_to_guild(guild)
+                                recreated_menu = True
         except Exception as e:
             logging.error(f"Error during cleanup in guild '{guild.name}': {e}")
 

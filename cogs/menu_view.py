@@ -117,12 +117,6 @@ class MenuViewCog(commands.Cog):
         self.bot.add_view(self.sos_menu_view)
         logging.info("SOSMenuView registered globally as a persistent view.")
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        logging.info("MenuViewCog is ready.")
-        for guild in self.bot.guilds:
-            await self.send_sos_menu_to_guild(guild)
-
     async def send_sos_menu_to_guild(self, guild: discord.Guild):
         """
         Sends the SOS menu with instructions to a specific guild's designated GPT channel.

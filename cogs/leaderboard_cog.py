@@ -41,34 +41,35 @@ class LeaderboardCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.leaderboard_lock = asyncio.Lock()
+        self.last_known_month = datetime.utcnow().month
         self.update_leaderboard_task.start()
-        self.schedule_monthly_update.start()
 
     def cog_unload(self):
         self.update_leaderboard_task.cancel()
-        self.schedule_monthly_update.cancel()
-
-    @tasks.loop(hours=8)
-    async def update_leaderboard_task(self):
-        await self._run_leaderboard_update()
 
     @tasks.loop(hours=1)
-    async def schedule_monthly_update(self):
-        now = datetime.utcnow()
-        if now.day == 28 and now.hour == 0:
-            logger.info("It's the 28th - triggering forced leaderboard update for monthly rollover!")
+    async def update_leaderboard_task(self):
+        current_month = datetime.utcnow().month
+        is_new_month = current_month != self.last_known_month
+        if is_new_month:
+            logger.info("New month detected! Forcing leaderboard update.")
+            self.last_known_month = current_month
             await self._run_leaderboard_update(force=True)
+        else:
+            await self._run_leaderboard_update()
 
     @update_leaderboard_task.before_loop
-    @schedule_monthly_update.before_loop
-    async def before_loops(self):
+    async def before_update_leaderboard_task(self):
         await self.bot.wait_until_ready()
 
     async def _run_leaderboard_update(self, force=False):
         if force:
             logger.info("Forced leaderboard update requested.")
         async with self.leaderboard_lock:
-            title, stat_key = get_current_focus()
+            focus_title, stat_key = get_current_focus()
+            month_name = datetime.utcnow().strftime("%B %Y")
+            title = f"MONTHLY {focus_title.upper()} LEADERBOARD ({month_name})"
+            
             leaderboard_data = await self.calculate_leaderboard_data(stat_key)
             await self.promote_class_a_citizens(leaderboard_data)
             embeds, image_path = await self.build_leaderboard_embeds(leaderboard_data, title, stat_key)
@@ -88,7 +89,7 @@ class LeaderboardCog(commands.Cog):
                 # Post leaderboard
                 if not embeds:
                     embed = discord.Embed(
-                        title="GPTF TOTAL KILL LEADERBOARD (August 2025) [Migrating to website August 30th]",
+                        title=title,
                         description="No leaderboard data available.",
                         color=discord.Color.blue()
                     )
@@ -230,7 +231,7 @@ class LeaderboardCog(commands.Cog):
             logger.error(f"Error fetching leaderboard: {e}")
             return []
 
-    async def build_leaderboard_embeds(self, leaderboard_data, focus_title, stat_key):
+    async def build_leaderboard_embeds(self, leaderboard_data, title, stat_key):
         embeds = []
         batch_size = 10
         image_path = LEADERBOARD_IMAGE_PATH if os.path.exists(LEADERBOARD_IMAGE_PATH) else None
@@ -242,7 +243,7 @@ class LeaderboardCog(commands.Cog):
         for i in range(num_pages):
             batch = leaderboard_data[i*batch_size:(i+1)*batch_size]
             embed = discord.Embed(
-                title="MONTHLY TOTAL KILL LEADERBOARD (August 2025)",
+                title=title,
                 color=discord.Color.blurple()
             )
             if num_pages > 1:
