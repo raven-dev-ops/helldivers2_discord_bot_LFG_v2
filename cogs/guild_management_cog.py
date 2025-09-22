@@ -76,8 +76,8 @@ class GuildManagementCog(commands.Cog):
     async def setup_guild(self, guild: discord.Guild, force_refresh=False):
         category_name = "GPT NETWORK"
         gpt_channel_name = "❗｜clan-menu"
-        monitor_channel_name = "❗｜stats-reports"
-        leaderboard_channel_name = "❗｜stats-leaderboard"
+        monitor_channel_name = "❗｜stat-reports"
+        leaderboard_channel_name = "❗｜leaderboard"
         sos_lfg_role_name = "NET PING!"
         sos_lfg_role_color = 0xfaee10
 
