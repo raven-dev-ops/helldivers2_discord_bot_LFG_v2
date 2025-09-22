@@ -252,7 +252,7 @@ class LeaderboardCog(commands.Cog):
 
     async def build_leaderboard_embeds(self, leaderboard_data, title, stat_key):
         embeds = []
-        batch_size = 10
+        batch_size = 25  # up to 25 entries per page
 
         if not leaderboard_data:
             return []
@@ -263,23 +263,12 @@ class LeaderboardCog(commands.Cog):
             embed = discord.Embed(title=title, color=discord.Color.blurple())
             if num_pages > 1:
                 embed.title += f" (Page {i+1}/{num_pages})"
-            embed.set_footer(text="Check out https://gptfleet.com for more detailed information!")
 
+            # Player entries
             for idx, p in enumerate(batch, start=i*batch_size + 1):
                 name = (p['player_name'][:42] + "…") if len(p['player_name']) > 43 else p['player_name']
 
-                focus_val = p[stat_key]
-                if stat_key == "average_accuracy":
-                    focus_str = f"{focus_val:.1f}%"
-                elif stat_key == "average_kills":
-                    focus_str = f"{focus_val:.2f}"
-                elif stat_key == "least_deaths":
-                    focus_str = f"{-focus_val}"
-                else:
-                    focus_str = f"{focus_val}"
-
                 value_lines = [
-                    f"**Name:** {name}",
                     f"**Kills:** {p['kills']}",
                     f"**Accuracy:** {(p['shots_hit'] / p['shots_fired'] * 100 if p['shots_fired'] else 0.0):.1f}%",
                     f"**Shots Fired:** {p['shots_fired']}",
@@ -289,7 +278,6 @@ class LeaderboardCog(commands.Cog):
                     f"**Stims Used:** {p['stims_used']}",
                     f"**Samples Extracted:** {p['samples_extracted']}",
                     f"**Stratagems Used:** {p['stratagems_used']}",
-                    f"**Focus Stat ({stat_key.replace('_',' ').title()}):** {focus_str}",
                 ]
 
                 embed.add_field(
@@ -297,6 +285,13 @@ class LeaderboardCog(commands.Cog):
                     value="\n".join(value_lines),
                     inline=True
                 )
+
+            # Clickable site link at the bottom
+            embed.add_field(
+                name="\u200b",
+                value="[gptfleet.com](https://gptfleet.com)",
+                inline=False
+            )
 
             embeds.append(embed)
 
