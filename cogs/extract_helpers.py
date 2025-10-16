@@ -1,21 +1,26 @@
 import re
 import discord
 
+
 def prevent_discord_formatting(name: str) -> str:
     if not name:
         return ""
     return name.replace('<#', '<\u200B#').replace('<@&', '<\u200B@&')
 
+
 def highlight_zero_values(player: dict) -> list:
-    # Add your new numeric fields here so they can be flagged when zero/empty
-    fields = ["Kills", "Shots Fired", "Shots Hit",
-              "Deaths", "Melee Kills", "Stims Used", "Samples Extracted", "Stratagems Used"]
+    # Zero-highlighting retained for reference, but not enforced during confirm
+    fields = [
+        "Kills", "Shots Fired", "Shots Hit",
+        "Deaths", "Melee Kills", "Stims Used", "Samples Extracted", "Stratagems Used"
+    ]
     zero_fields = []
     for field in fields:
         val = str(player.get(field, 'N/A'))
-        if val in ['0', '0.0', '0.00', 'None', 'N/A', '0%']:
+        if val in ['0', '0.0', '0.00', 'None', 'N/A']:
             zero_fields.append(field)
     return zero_fields
+
 
 def validate_stat(field_name: str, raw_value: str):
     # Normalize and validate each field type
@@ -35,6 +40,7 @@ def validate_stat(field_name: str, raw_value: str):
     else:
         return raw_value
 
+
 def clean_for_match(name):
     if not name:
         return ""
@@ -42,6 +48,7 @@ def clean_for_match(name):
     name = re.sub(r'[^a-z0-9]', '', name)
     name = re.sub(r'^(mr|ms|mrs|dr)', '', name)
     return name
+
 
 def build_single_embed(players_data: list, submitter_player_name: str) -> discord.Embed:
     embed = discord.Embed(
@@ -78,10 +85,11 @@ def build_single_embed(players_data: list, submitter_player_name: str) -> discor
         embed.add_field(name=f"Player {index}", value=player_info, inline=False)
     return embed
 
+
 def build_monitor_embed(players_data: list, submitter_name: str, mission_id: int | None = None) -> discord.Embed:
     subtitle = f"Submitted by: {submitter_name}"
     if mission_id is not None:
-        subtitle += f" • Mission #{mission_id}"
+        subtitle += f" \u2022 Mission #{mission_id}"
     embed = discord.Embed(
         title="Saved Results",
         description=subtitle,
