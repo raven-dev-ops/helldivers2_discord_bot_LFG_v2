@@ -4,6 +4,7 @@ import discord
 import traceback
 from discord.ext import commands
 from motor.motor_asyncio import AsyncIOMotorClient
+from database import create_indexes
 
 logging.basicConfig(level=logging.INFO)
 
@@ -82,6 +83,7 @@ if __name__ == '__main__':
     bot.mongo_db = mongo_client[db_name]
 
     async def runner():
+        await create_indexes()
         await load_cogs()
         await bot.start(token)
 

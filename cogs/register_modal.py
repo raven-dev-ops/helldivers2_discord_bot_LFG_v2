@@ -62,31 +62,33 @@ class RegisterModal(discord.ui.Modal, title="Register as a Helldiver"):
         """
         try:
             # Collect user data
-            discord_id = interaction.user.id
-            discord_server_id = interaction.guild.id
-            server_name = interaction.guild.name
-            server_nickname = interaction.user.display_name
-            player_name = self.helldiver_name.value
+            discord_id = int(interaction.user.id)
+            discord_server_id = int(interaction.guild.id)
+            server_name = interaction.guild.name.strip()
+            server_nickname = interaction.user.display_name.strip()
+            player_name = self.helldiver_name.value.strip()
             logging.info(f"Registering user '{player_name}' (Discord ID: {discord_id}) in guild '{server_name}' ({discord_server_id}).")
-
-            # Prepare the document
-            player_data = {
-                "discord_id": discord_id,
-                "discord_server_id": discord_server_id,
-                "server_name": server_name,
-                "server_nickname": server_nickname,
-                "player_name": player_name,
-                "registered_at": datetime.utcnow()
-            }
 
             # Insert into the Alliance collection
             alliance_collection = self.bot.mongo_db['Alliance']
-            await alliance_collection.update_one(
-                {"discord_id": discord_id},
-                {"$set": player_data},
-                upsert=True
-            )
-            logging.info(f"User '{player_name}' upserted into Alliance collection.")
+            filter_doc = {
+                "discord_id": discord_id,
+                "discord_server_id": discord_server_id,
+            }
+            update_doc = {
+                "$set": {
+                    "player_name": player_name,
+                    "server_name": server_name,
+                    "server_nickname": server_nickname,
+                },
+                "$setOnInsert": {"registered_at": datetime.utcnow()}
+            }
+
+            result = await alliance_collection.update_one(filter_doc, update_doc, upsert=True)
+            if result.upserted_id is not None:
+                logging.info(f"User '{player_name}' registered in Alliance collection via upsert.")
+            else:
+                logging.info(f"User '{player_name}' Alliance registration updated without creating a duplicate.")
 
             # Handle role assignment if a role was selected
             selected_role_id = None

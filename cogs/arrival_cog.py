@@ -1,7 +1,6 @@
 import discord
 from discord.ext import commands
 import logging
-from database import get_mongo_client
 from config import welcome_channel_id, class_b_role_id, guild_id
 from utils import log_to_monitor_channel
 from datetime import datetime
@@ -44,23 +43,30 @@ class ArrivalCog(commands.Cog):
                 return  # Stop if role not found
 
             # Register the user in the Alliance collection
-            mongo_client = await get_mongo_client()
-            db = mongo_client['GPTHellbot']
-            alliance_collection = db['Alliance']
+            alliance_collection = self.bot.mongo_db['Alliance']
 
-            new_registration = {
-                "discord_id": str(member.id),
-                "discord_server_id": str(member.guild.id),
-                "player_name": member.name.strip(),
-                "server_name": member.guild.name.strip(),
-                "server_nickname": member.display_name.strip(),
-                "registered_at": datetime.utcnow().isoformat()
+            filter_doc = {
+                "discord_id": int(member.id),
+                "discord_server_id": int(member.guild.id)
+            }
+            update_doc = {
+                "$set": {
+                    "player_name": member.name.strip(),
+                    "server_name": member.guild.name.strip(),
+                    "server_nickname": member.display_name.strip(),
+                },
+                "$setOnInsert": {"registered_at": datetime.utcnow()}
             }
 
-            await alliance_collection.insert_one(new_registration)
-            logging.info(
-                f"[ArrivalCog] Registered new member {member.display_name} in Alliance collection."
-            )
+            result = await alliance_collection.update_one(filter_doc, update_doc, upsert=True)
+            if result.upserted_id is not None:
+                logging.info(
+                    f"[ArrivalCog] Registered new member {member.display_name} in Alliance collection via upsert."
+                )
+            else:
+                logging.info(
+                    f"[ArrivalCog] Updated existing Alliance registration for {member.display_name}."
+                )
 
         except Exception as e:
             logging.error(f"[ArrivalCog] Error welcoming/ registering {member.display_name}: {e}")

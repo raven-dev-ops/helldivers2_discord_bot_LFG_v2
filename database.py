@@ -8,6 +8,7 @@ from config import (
 )
 from rapidfuzz import fuzz
 from datetime import datetime
+from pymongo.errors import OperationFailure
 import re
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,37 @@ async def create_indexes():
     """
     try:
         await get_mongo_client()
+
+        # Enforce numeric typing for discord identifiers while allowing legacy docs
+        try:
+            validator_command = {
+                "collMod": REGISTRATION_COLLECTION,
+                "validator": {
+                    "$jsonSchema": {
+                        "bsonType": "object",
+                        "required": ["discord_id", "discord_server_id"],
+                        "properties": {
+                            "discord_id": {"bsonType": ["long", "int"]},
+                            "discord_server_id": {"bsonType": ["long", "int"]}
+                        }
+                    }
+                },
+                "validationLevel": "moderate",
+                "validationAction": "error"
+            }
+            await _db.command(validator_command)
+            logger.info("Alliance collection validator ensured.")
+        except OperationFailure as oe:
+            if oe.code == 26:  # NamespaceNotFound
+                logger.info("Alliance collection missing; creating before applying validator.")
+                await _db.create_collection(REGISTRATION_COLLECTION)
+                await _db.command(validator_command)
+                logger.info("Alliance collection validator applied after collection creation.")
+            else:
+                logger.warning(f"Could not apply Alliance collection validator: {oe}")
+        except Exception as e:
+            logger.warning(f"Unexpected error applying Alliance validator: {e}")
+
         # Stats collection: index useful fields we actually query/sort on
         await _db[STATS_COLLECTION].create_index("player_name")
         await _db[STATS_COLLECTION].create_index("submitted_at")
@@ -71,6 +103,11 @@ async def create_indexes():
         await _db[REGISTRATION_COLLECTION].create_index("player_name")
         await _db[REGISTRATION_COLLECTION].create_index("discord_id")
         await _db[REGISTRATION_COLLECTION].create_index("discord_server_id")
+        await _db[REGISTRATION_COLLECTION].create_index(
+            [("discord_id", 1), ("discord_server_id", 1)],
+            name="uix_discord_user_server",
+            unique=True
+        )
         await _db[SERVER_LISTING_COLLECTION].create_index("discord_server_id")
 
         logger.info("MongoDB indexes created/ensured.")
