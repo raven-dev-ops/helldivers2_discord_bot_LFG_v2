@@ -8,7 +8,7 @@ def prevent_discord_formatting(name: str) -> str:
 
 def highlight_zero_values(player: dict) -> list:
     # Add your new numeric fields here so they can be flagged when zero/empty
-    fields = ["Kills", "Accuracy", "Shots Fired", "Shots Hit",
+    fields = ["Kills", "Shots Fired", "Shots Hit",
               "Deaths", "Melee Kills", "Stims Used", "Samples Extracted", "Stratagems Used"]
     zero_fields = []
     for field in fields:
@@ -75,11 +75,6 @@ def build_single_embed(players_data: list, submitter_player_name: str) -> discor
             f"**Samples Extracted**: {samples_extracted}\n"
             f"**Stratagems Used**: {stratagems_used}\n"
         )
-
-        zero_vals = highlight_zero_values(player)
-        if zero_vals:
-            player_info += f"\n**Needs Confirmation**: {', '.join(zero_vals)}"
-
         embed.add_field(name=f"Player {index}", value=player_info, inline=False)
     return embed
 
@@ -117,3 +112,4 @@ def build_monitor_embed(players_data: list, submitter_name: str) -> discord.Embe
         )
         embed.add_field(name=f"Player {index}", value=final_info, inline=False)
     return embed
+

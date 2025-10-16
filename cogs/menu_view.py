@@ -22,6 +22,12 @@ class SOSMenuView(discord.ui.View):
     def __init__(self, bot: commands.Bot):
         super().__init__(timeout=None)
         self.bot = bot
+        # Add external link buttons
+        try:
+            self.add_item(discord.ui.Button(label="website", style=discord.ButtonStyle.link, url="https://gptfleet.com"))
+            self.add_item(discord.ui.Button(label="store", style=discord.ButtonStyle.link, url="https://gptfleet-shop.fourthwall.com/"))
+        except Exception:
+            pass
 
     #@discord.ui.button(label="CALL SOS", style=discord.ButtonStyle.danger, custom_id="launch_sos_button", disabled=False)
     #async def launch_sos_button(self, interaction: discord.Interaction, button: discord.ui.Button):

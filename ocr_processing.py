@@ -126,7 +126,8 @@ def process_for_ocr(image, regions, NUM_PLAYERS=None):
     NUM_PLAYERS = min(max(NUM_PLAYERS, 2), 4)  # always at least 2, at most 4
 
     # Fields we will attempt to read for each player column (must match your region keys)
-    BASE_FIELDS = ['Name', 'Kills', 'Shots Fired', 'Shots Hit', 'Deaths', 'Accuracy', 'Melee Kills']
+    # Removed 'Accuracy' from scanning; it will be calculated from Shots Fired/Hit.
+    BASE_FIELDS = ['Name', 'Kills', 'Shots Fired', 'Shots Hit', 'Deaths', 'Melee Kills']
     EXTRA_FIELDS = ['Stims Used', 'Samples Extracted', 'Stratagems Used']  # NEW
     ALL_FIELDS = BASE_FIELDS + EXTRA_FIELDS
 
@@ -135,7 +136,6 @@ def process_for_ocr(image, regions, NUM_PLAYERS=None):
         player_stats = {}
         shots_fired = 0
         shots_hit = 0
-        ocr_accuracy = None
 
         for key in ALL_FIELDS:
             label = f"P{player_index + 1} {key}"
@@ -172,15 +172,7 @@ def process_for_ocr(image, regions, NUM_PLAYERS=None):
                     shots_hit = int(cleaned_result)
                 except ValueError:
                     shots_hit = 0
-            elif key == "Accuracy":
-                try:
-                    numeric_part = re.sub(r'[^0-9.]', '', cleaned_result.rstrip('%'))
-                    if numeric_part:
-                        ocr_accuracy = float(numeric_part)
-                    else:
-                        ocr_accuracy = None
-                except ValueError:
-                    ocr_accuracy = None
+            # 'Accuracy' is no longer OCR-scanned; it will be computed below
             elif key in {"Melee Kills", "Stims Used", "Samples Extracted", "Stratagems Used"}:
                 try:
                     player_stats[label] = int(cleaned_result)
@@ -198,12 +190,9 @@ def process_for_ocr(image, regions, NUM_PLAYERS=None):
             )
             shots_hit = shots_fired
 
-        # Recalc accuracy if needed
-        if ocr_accuracy is not None and 0 <= ocr_accuracy <= 100.0:
-            accuracy = ocr_accuracy
-        else:
-            accuracy = (shots_hit / shots_fired) * 100 if shots_fired > 0 else 0
-            accuracy = min(accuracy, 100.0)
+        # Calculate accuracy from shots; allow zeros
+        accuracy = (shots_hit / shots_fired) * 100 if shots_fired > 0 else 0
+        accuracy = min(accuracy, 100.0)
 
         # Build final dict with standardized keys
         formatted_player = {}

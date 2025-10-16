@@ -87,12 +87,6 @@ class ConfirmationView(discord.ui.View):
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             await interaction.response.defer(ephemeral=True)
-            if any(highlight_zero_values(p) for p in self.shared_data.players_data):
-                await interaction.followup.send(
-                    "Some values are zero or missing. Please EDIT them before confirming.",
-                    ephemeral=True
-                )
-                return
             await insert_player_data(self.shared_data.players_data, self.shared_data.submitter_player_name)
             for player in self.shared_data.players_data:
                 await maybe_promote(self.bot, player)
