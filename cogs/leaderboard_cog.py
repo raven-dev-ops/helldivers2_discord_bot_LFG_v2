@@ -88,21 +88,30 @@ class LeaderboardCog(commands.Cog):
                 channel = await self.ensure_leaderboard_channel(guild)
                 if not channel:
                     continue
-                # Clean up old leaderboard messages (targeted)
+                # Clean up old leaderboard messages (ensure deletion before posting new)
                 if channel.permissions_for(guild.me).manage_messages:
                     try:
-                        async for msg in channel.history(limit=100):
-                            if msg.author != self.bot.user or not msg.embeds:
-                                continue
-                            title = (msg.embeds[0].title or "").upper()
-                            if "LEADERBOARD" in title:
-                                try:
-                                    await msg.delete()
-                                    await asyncio.sleep(0.6)
-                                except Exception:
-                                    pass
+                        total_deleted = 0
+                        while True:
+                            found = False
+                            async for msg in channel.history(limit=200):
+                                if msg.author != self.bot.user or not msg.embeds:
+                                    continue
+                                old_title = (msg.embeds[0].title or "").upper()
+                                if "LEADERBOARD" in old_title:
+                                    try:
+                                        await msg.delete()
+                                        total_deleted += 1
+                                        found = True
+                                        await asyncio.sleep(0.4)
+                                    except Exception:
+                                        pass
+                            if not found:
+                                break
+                        if total_deleted:
+                            logger.info(f"Deleted {total_deleted} old leaderboard messages in {guild.name} before posting new.")
                     except Exception as e:
-                        logger.warning(f"Failed to scan/delete old leaderboard messages in {guild.name}: {e}")
+                        logger.warning(f"Failed to purge old leaderboard messages in {guild.name}: {e}")
                 # Post leaderboard
                 if not embeds:
                     embed = discord.Embed(

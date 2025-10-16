@@ -187,54 +187,50 @@ class MenuViewCog(commands.Cog):
                     except Exception:
                         existing_message = None
 
-                if existing_message:
-                    if file:
-                        # Discord does not support editing attachments directly; resend image URL if persistent
-                        await existing_message.edit(embed=embed, view=self.sos_menu_view)
-                    else:
-                        await existing_message.edit(embed=embed, view=self.sos_menu_view)
-                    logging.info(f"Updated existing SOS menu in guild '{guild.name}' (message ID: {existing_message.id}).")
-                else:
-                    # Optional cleanup: remove older bot-authored clan menu messages
-                    try:
-                        deleted = 0
-                        async for m in gpt_channel.history(limit=100):
+                # Always delete previous menu posts before posting a new one
+                try:
+                    # Delete the tracked menu if it exists
+                    if existing_message:
+                        try:
+                            await existing_message.delete()
+                            logging.info(f"Deleted existing tracked menu message {existing_message.id} in '{gpt_channel.name}'.")
+                        except Exception:
+                            pass
+                    # Purge any other old menu messages authored by the bot
+                    total_deleted = 0
+                    while True:
+                        found = False
+                        async for m in gpt_channel.history(limit=200):
                             if m.author == self.bot.user and m.embeds and m.embeds[0].title and "CLAN MENU" in m.embeds[0].title.upper():
-                                await m.delete()
-                                deleted += 1
-                        if deleted:
-                            logging.info(f"Deleted {deleted} old clan menu messages in '{gpt_channel.name}' for guild '{guild.name}'.")
-                    except Exception as e:
-                        logging.warning(f"Failed to cleanup old clan menu messages in '{gpt_channel.name}' for guild '{guild.name}': {e}")
+                                try:
+                                    await m.delete()
+                                    total_deleted += 1
+                                    found = True
+                                except Exception:
+                                    pass
+                        if not found:
+                            break
+                    if total_deleted:
+                        logging.info(f"Deleted {total_deleted} old clan menu messages in '{gpt_channel.name}' for guild '{guild.name}'.")
+                except Exception as e:
+                    logging.warning(f"Failed to purge old clan menu messages in '{gpt_channel.name}' for guild '{guild.name}': {e}")
 
-                    if file:
-                        sent = await gpt_channel.send(embed=embed, view=self.sos_menu_view, file=file)
-                    else:
-                        sent = await gpt_channel.send(embed=embed, view=self.sos_menu_view)
-                    # Post-send cleanup to guarantee a single menu remains
-                    try:
-                        purged = 0
-                        async for m in gpt_channel.history(limit=100):
-                            if m.id == sent.id:
-                                continue
-                            if m.author == self.bot.user and m.embeds and m.embeds[0].title and "CLAN MENU" in m.embeds[0].title.upper():
-                                await m.delete()
-                                purged += 1
-                        if purged:
-                            logging.info(f"Post-send cleanup removed {purged} extra clan menu messages in '{gpt_channel.name}' for guild '{guild.name}'.")
-                    except Exception as e:
-                        logging.warning(f"Failed post-send menu cleanup in '{gpt_channel.name}' for guild '{guild.name}': {e}")
-                    # Store new message ID
-                    try:
-                        await server_listing.update_one(
-                            {"discord_server_id": guild.id},
-                            {"$set": {"menu_message_id": int(sent.id)}},
-                            upsert=True
-                        )
-                        logging.info(f"Stored menu_message_id for guild '{guild.name}': {sent.id}")
-                    except Exception as e:
-                        logging.warning(f"Failed to store menu_message_id for guild '{guild.name}': {e}")
-                    logging.info(f"Sent new SOS menu to guild '{guild.name}' in channel '{gpt_channel.name}'.")
+                # Post the new menu message
+                if file:
+                    sent = await gpt_channel.send(embed=embed, view=self.sos_menu_view, file=file)
+                else:
+                    sent = await gpt_channel.send(embed=embed, view=self.sos_menu_view)
+                # Store new message ID
+                try:
+                    await server_listing.update_one(
+                        {"discord_server_id": guild.id},
+                        {"$set": {"menu_message_id": int(sent.id)}},
+                        upsert=True
+                    )
+                    logging.info(f"Stored menu_message_id for guild '{guild.name}': {sent.id}")
+                except Exception as e:
+                    logging.warning(f"Failed to store menu_message_id for guild '{guild.name}': {e}")
+                logging.info(f"Sent new SOS menu to guild '{guild.name}' in channel '{gpt_channel.name}'.")
             except discord.Forbidden:
                 logging.error(f"Bot is forbidden from sending/editing messages in channel '{gpt_channel.name}' ({gpt_channel.id}) in guild '{guild.name}'.")
             except Exception as e:
