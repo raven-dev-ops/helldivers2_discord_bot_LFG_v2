@@ -114,10 +114,18 @@ class SOSMenuView(discord.ui.View):
     )
     async def submit_stats_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         extract_cog = self.bot.get_cog("ExtractCog")
+        if not extract_cog:
+            logging.warning("ExtractCog not found on button press. Attempting dynamic load of 'cogs.extract_cog'.")
+            try:
+                await self.bot.load_extension('cogs.extract_cog')
+                extract_cog = self.bot.get_cog("ExtractCog")
+            except Exception as e:
+                logging.error(f"Failed to dynamically load 'cogs.extract_cog': {e}", exc_info=True)
+
         if extract_cog:
             await extract_cog.submit_stats_button_flow(interaction)
         else:
-            logging.error("ExtractCog not found when pressing UPLOAD MISSION. Ensure 'cogs.extract_cog' loaded correctly.")
+            logging.error("ExtractCog still unavailable after dynamic load attempt.")
             await interaction.response.send_message(
                 "Upload is not available at the moment. Please try again later.",
                 ephemeral=True

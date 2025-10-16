@@ -38,6 +38,7 @@ async def on_ready():
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
     print('------')
     print('Cogs loaded:', list(bot.cogs.keys()))  # See actual registered cog class names
+    logging.info(f"Cogs loaded: {list(bot.cogs.keys())}")
     if not bot.intents.members:
         logging.warning("GUILD_MEMBERS intent is disabled. Member join/leave events will not fire. Enable it in the Discord Developer Portal.")
 
