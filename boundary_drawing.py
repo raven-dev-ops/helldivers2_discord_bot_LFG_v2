@@ -28,7 +28,8 @@ KNOWN_RESOLUTIONS = {
             "Melee Kills": (250, 400, 293, 424),
             # Adjust Stims Used proportionally to 1920x1080 fix (575 -> ~426 here)
             "Stims Used":  (250, 426, 293, 450),
-            "Samples Extracted":  (250, 460, 293, 484),
+            # Adjust Samples Extracted proportionally to 1920x1080 fix (~-148px on 800px height)
+            "Samples Extracted":  (250, 312, 293, 336),
             "Stratagems Used": (250, 490, 293, 514),
         },
         # For subsequent players, we shift horizontally by 305
