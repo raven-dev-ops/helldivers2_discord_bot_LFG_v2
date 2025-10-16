@@ -1,4 +1,4 @@
-import os
+﻿import os
 import logging
 import discord
 from discord.ext import commands, tasks
@@ -15,7 +15,12 @@ except Exception:  # pragma: no cover
 from config import class_a_role_id
 
 CATEGORY_NAME = "GPT Network"
-LEADERBOARD_CHANNEL_NAME = "❗｜leaderboard"
+LEADERBOARD_CHANNEL_NAME = "\u2757\uFF5Cleaderboard"
+ALTERNATE_LEADERBOARD_NAMES = [
+    LEADERBOARD_CHANNEL_NAME,
+    "leaderboard",
+    "\u2757|leaderboard",
+]
 LEADERBOARD_IMAGE_PATH = "sos_leaderboard.png"
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
@@ -36,6 +41,17 @@ class LeaderboardCog(commands.Cog):
 
     def cog_unload(self):
         self.update_leaderboard_task.cancel()
+
+    @commands.command(name="refresh_leaderboard")
+    @commands.has_permissions(administrator=True)
+    async def refresh_leaderboard(self, ctx: commands.Context):
+        """Admin-only: force refresh the leaderboard now."""
+        try:
+            await self._run_leaderboard_update(force=True)
+            await ctx.reply("Leaderboard refreshed.")
+        except Exception as e:
+            logger.error(f"Error during manual leaderboard refresh: {e}")
+            await ctx.reply("Failed to refresh leaderboard. Check logs.")
 
     @tasks.loop(hours=1)
     async def update_leaderboard_task(self):
@@ -127,7 +143,7 @@ class LeaderboardCog(commands.Cog):
 
     async def ensure_leaderboard_channel(self, guild: discord.Guild):
         # Try to get channel
-        channel = discord.utils.get(guild.text_channels, name=LEADERBOARD_CHANNEL_NAME)
+        channel = next((c for c in guild.text_channels if c.name in ALTERNATE_LEADERBOARD_NAMES), None)
         category = discord.utils.get(guild.categories, name=CATEGORY_NAME)
         overwrites = {
             guild.me: discord.PermissionOverwrite(send_messages=True, embed_links=True, attach_files=True, manage_messages=True)
@@ -141,6 +157,13 @@ class LeaderboardCog(commands.Cog):
         # Update overwrites on existing channel to ensure visibility
         elif channel:
             changed = False
+            # Normalize name to the expected one
+            if channel.name != LEADERBOARD_CHANNEL_NAME and guild.me.guild_permissions.manage_channels:
+                try:
+                    await channel.edit(name=LEADERBOARD_CHANNEL_NAME, reason="Normalize leaderboard channel name")
+                    changed = True
+                except Exception:
+                    pass
             # Make sure bot can send
             bot_ow = channel.overwrites_for(guild.me)
             if not bot_ow.send_messages or not bot_ow.embed_links or not bot_ow.attach_files:
@@ -266,7 +289,7 @@ class LeaderboardCog(commands.Cog):
 
             # Player entries
             for idx, p in enumerate(batch, start=i*batch_size + 1):
-                name = (p['player_name'][:42] + "…") if len(p['player_name']) > 43 else p['player_name']
+                name = (p['player_name'][:42] + "â€¦") if len(p['player_name']) > 43 else p['player_name']
 
                 value_lines = [
                     f"**Kills:** {p['kills']}",
@@ -304,3 +327,5 @@ async def setup(bot):
     if not hasattr(bot, 'mongo_db'):
         raise RuntimeError("LeaderboardCog requires bot.mongo_db to be initialized.")
     await bot.add_cog(LeaderboardCog(bot))
+
+
