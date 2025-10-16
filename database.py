@@ -1,5 +1,6 @@
 import logging
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import ReturnDocument
 from typing import List, Dict, Any, Tuple, Optional
 from config import (
     MONGODB_URI, DATABASE_NAME,
@@ -98,6 +99,7 @@ async def create_indexes():
         await _db[STATS_COLLECTION].create_index("submitted_at")
         await _db[STATS_COLLECTION].create_index("discord_id")
         await _db[STATS_COLLECTION].create_index("discord_server_id")
+        await _db[STATS_COLLECTION].create_index("mission_id")
 
         # Registration & server listing
         await _db[REGISTRATION_COLLECTION].create_index("player_name")
@@ -236,8 +238,24 @@ def find_best_match(
 async def insert_player_data(players_data: List[Dict[str, Any]], submitted_by: str):
     """
     Insert each player's stats data into the stats_collection.
+    Assigns an auto-incrementing mission_id shared by all players in this submission.
+    Returns the mission_id used.
     """
     await get_mongo_client()
+    # Get next mission id from a Counters collection
+    counters = _db['Counters']
+    try:
+        counter_doc = await counters.find_one_and_update(
+            {"_id": "mission_id"},
+            {"$inc": {"seq": 1}},
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+        mission_id = int(counter_doc.get("seq", 1))
+    except Exception as e:
+        logger.error(f"Failed to increment mission counter: {e}")
+        mission_id = int(datetime.utcnow().timestamp())  # fallback unique-ish id
+
     for player in players_data:
         doc = {
             "player_name": player.get("player_name", "Unknown"),
@@ -256,13 +274,59 @@ async def insert_player_data(players_data: List[Dict[str, Any]], submitted_by: s
             "discord_server_id": player.get("discord_server_id", None),
             "clan_name": player.get("clan_name", "N/A"),
             "submitted_by": submitted_by,
-            "submitted_at": datetime.utcnow()
+            "submitted_at": datetime.utcnow(),
+            "mission_id": mission_id,
         }
         try:
             await stats_collection.insert_one(doc)
-            logger.info(f"Inserted player data for {doc['player_name']}, submitted by {submitted_by}.")
+            logger.info(f"Inserted player data for {doc['player_name']} (mission #{mission_id}), submitted by {submitted_by}.")
         except Exception as e:
             logger.error(f"Failed to insert player data for {doc.get('player_name','Unknown')}: {e}")
+    return mission_id
+
+################################################
+# MISSION QUERIES/UPDATES
+################################################
+
+async def get_mission_docs(mission_id: int) -> List[Dict[str, Any]]:
+    try:
+        await get_mongo_client()
+        docs = await stats_collection.find({"mission_id": int(mission_id)}).to_list(None)
+        return docs
+    except Exception as e:
+        logger.error(f"Error fetching mission #{mission_id}: {e}")
+        return []
+
+async def update_mission_player_fields(mission_id: int, player_name: str, updates: Dict[str, Any]) -> bool:
+    """
+    Update one player's fields for a mission. Recomputes Accuracy if shots changed.
+    """
+    try:
+        await get_mongo_client()
+        doc = await stats_collection.find_one({"mission_id": int(mission_id), "player_name": player_name})
+        if not doc:
+            return False
+        # Normalize numeric fields
+        def to_int(v, default=0):
+            try:
+                return int(float(v))
+            except Exception:
+                return default
+        sf = to_int(updates.get("Shots Fired", doc.get("Shots Fired", 0)), 0)
+        sh = to_int(updates.get("Shots Hit", doc.get("Shots Hit", 0)), 0)
+        if sh > sf:
+            sh = sf
+        # Recompute accuracy
+        acc = (sh / sf * 100) if sf > 0 else 0
+        updates = dict(updates)
+        updates["Shots Fired"] = sf
+        updates["Shots Hit"] = sh
+        updates["Accuracy"] = f"{min(acc, 100.0):.1f}%"
+        await stats_collection.update_one({"_id": doc["_id"]}, {"$set": updates})
+        return True
+    except Exception as e:
+        logger.error(f"Error updating mission #{mission_id} for player {player_name}: {e}")
+        return False
 
 async def count_user_missions(discord_id: int) -> int:
     """Count missions completed by a specific Discord user."""

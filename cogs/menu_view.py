@@ -4,6 +4,9 @@ import discord
 from discord.ext import commands
 import logging
 import os
+import asyncio
+from .extract_helpers import validate_stat
+from database import get_mission_docs, update_mission_player_fields
 
 # Map each clan name to the ID of the guild where we store the invite link
 CLAN_SERVER_IDS = {
@@ -128,6 +131,116 @@ class SOSMenuView(discord.ui.View):
                 "The stats submission system is not available at the moment. Please try again later.",
                 ephemeral=True
             )
+
+    @discord.ui.button(label="EDIT SUBMISSION", style=discord.ButtonStyle.primary, custom_id="edit_submission_button")
+    async def edit_submission_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        try:
+            modal = EditSubmissionModal(self.bot)
+            await interaction.response.send_modal(modal)
+        except Exception as e:
+            logging.error(f"Error opening edit submission modal: {e}")
+            if not interaction.response.is_done():
+                await interaction.response.send_message("Unable to start edit flow.", ephemeral=True)
+
+
+class EditSubmissionModal(discord.ui.Modal, title="Edit Submission"):
+    mission_id = discord.ui.TextInput(label="Mission ID", placeholder="e.g. 1042", required=True, max_length=20)
+
+    def __init__(self, bot: commands.Bot):
+        super().__init__()
+        self.bot = bot
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            try:
+                mission_id_val = int(str(self.mission_id.value).strip())
+            except Exception:
+                await interaction.response.send_message("Mission ID must be a number.", ephemeral=True)
+                return
+
+            docs = await get_mission_docs(mission_id_val)
+            if not docs:
+                await interaction.response.send_message(f"No records found for Mission #{mission_id_val}.", ephemeral=True)
+                return
+
+            view = EditMissionView(self.bot, mission_id_val, docs)
+            player_list = ", ".join([d.get("player_name", "Unknown") for d in docs])
+            embed = discord.Embed(title=f"Editing Mission #{mission_id_val}", description=f"Players: {player_list}", color=discord.Color.purple())
+            await interaction.response.send_message(content="Select a player and field to edit:", embed=embed, view=view, ephemeral=True)
+        except Exception as e:
+            logging.error(f"Error starting edit mission flow: {e}")
+            try:
+                await interaction.response.send_message("Failed to start edit flow.", ephemeral=True)
+            except Exception:
+                pass
+
+
+class EditMissionView(discord.ui.View):
+    def __init__(self, bot: commands.Bot, mission_id: int, docs: list[dict]):
+        super().__init__(timeout=180)
+        self.bot = bot
+        self.mission_id = mission_id
+        self.docs = docs
+        self.selected_player = None
+
+        # Build player select
+        options = [discord.SelectOption(label=d.get("player_name", "Unknown")) for d in docs]
+        self.add_item(PlayerSelect(options, self))
+        # Build field select
+        fields = ['Kills', 'Shots Fired', 'Shots Hit', 'Deaths', 'Melee Kills', 'Stims Used', 'Samples Extracted', 'Stratagems Used']
+        field_options = [discord.SelectOption(label=f) for f in fields]
+        self.add_item(FieldSelect(field_options, self))
+
+    @discord.ui.button(label="DONE", style=discord.ButtonStyle.success)
+    async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for child in self.children:
+            child.disabled = True
+        await interaction.response.edit_message(content=f"Finished editing Mission #{self.mission_id}.", view=self)
+
+
+class PlayerSelect(discord.ui.Select):
+    def __init__(self, options, parent: EditMissionView):
+        super().__init__(placeholder="Select player", options=options)
+        self.parent = parent
+
+    async def callback(self, interaction: discord.Interaction):
+        self.parent.selected_player = self.values[0]
+        await interaction.response.edit_message(content=f"Selected player: {self.parent.selected_player}. Now select a field.")
+
+
+class FieldSelect(discord.ui.Select):
+    def __init__(self, options, parent: EditMissionView):
+        super().__init__(placeholder="Select field", options=options)
+        self.parent = parent
+
+    async def callback(self, interaction: discord.Interaction):
+        if not self.parent.selected_player:
+            await interaction.response.send_message("Please select a player first.", ephemeral=True)
+            return
+        await interaction.response.edit_message(content=f"Enter new value for {self.values[0]} (Player {self.parent.selected_player}) in chat…")
+        def check(m: discord.Message):
+            return m.author == interaction.user and m.channel == interaction.channel
+        try:
+            msg = await self.parent.bot.wait_for('message', check=check, timeout=60.0)
+            try:
+                await msg.delete()
+            except Exception:
+                pass
+            field = self.values[0]
+            try:
+                new_value = validate_stat(field, msg.content.strip())
+            except Exception:
+                await interaction.followup.send("Invalid value.", ephemeral=True)
+                return
+            # Prepare updates dict; validate_stat may return formatted strings
+            updates = {field: new_value}
+            ok = await update_mission_player_fields(self.parent.mission_id, self.parent.selected_player, updates)
+            if ok:
+                await interaction.followup.send(f"Updated Mission #{self.parent.mission_id} • {self.parent.selected_player} • {field} = {new_value}", ephemeral=True)
+            else:
+                await interaction.followup.send("Update failed; mission/player not found.", ephemeral=True)
+        except asyncio.TimeoutError:
+            await interaction.followup.send("Timed out waiting for input.", ephemeral=True)
 
 class MenuViewCog(commands.Cog):
     """
@@ -258,3 +371,4 @@ class MenuViewCog(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(MenuViewCog(bot))
+

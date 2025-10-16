@@ -104,15 +104,13 @@ class ConfirmationView(discord.ui.View):
                 p['Shots Hit'] = sh
                 p['Accuracy'] = f"{min(acc, 100.0):.1f}%"
 
-            await insert_player_data(self.shared_data.players_data, self.shared_data.submitter_player_name)
+            mission_id = await insert_player_data(self.shared_data.players_data, self.shared_data.submitter_player_name)
             for player in self.shared_data.players_data:
                 await maybe_promote(self.bot, player)
             leaderboard_cog = self.bot.get_cog("LeaderboardCog")
             if leaderboard_cog:
                 asyncio.create_task(leaderboard_cog._run_leaderboard_update(force=True))
-            monitor_embed = build_monitor_embed(
-                self.shared_data.players_data, self.shared_data.submitter_player_name
-            )
+            monitor_embed = build_monitor_embed(                self.shared_data.players_data, self.shared_data.submitter_player_name, mission_id=mission_id            )
             file_to_send = None
             if self.shared_data.screenshot_bytes and self.shared_data.screenshot_filename:
                 file_to_send = discord.File(BytesIO(self.shared_data.screenshot_bytes), filename=self.shared_data.screenshot_filename)
@@ -125,7 +123,7 @@ class ConfirmationView(discord.ui.View):
             else:
                 logger.error("Monitor channel not found or invalid ID in DB.")
             await self.shared_data.message.edit(
-                content="Data confirmed and saved successfully!",
+                content=f"Data confirmed and saved successfully! Mission #{mission_id}.",
                 embeds=[],
                 view=None
             )
@@ -478,3 +476,4 @@ class ExtractCog(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(ExtractCog(bot))
+

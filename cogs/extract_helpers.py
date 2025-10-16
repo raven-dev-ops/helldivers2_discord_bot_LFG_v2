@@ -78,10 +78,13 @@ def build_single_embed(players_data: list, submitter_player_name: str) -> discor
         embed.add_field(name=f"Player {index}", value=player_info, inline=False)
     return embed
 
-def build_monitor_embed(players_data: list, submitter_name: str) -> discord.Embed:
+def build_monitor_embed(players_data: list, submitter_name: str, mission_id: int | None = None) -> discord.Embed:
+    subtitle = f"Submitted by: {submitter_name}"
+    if mission_id is not None:
+        subtitle += f" • Mission #{mission_id}"
     embed = discord.Embed(
         title="Saved Results",
-        description=f"Submitted by: {submitter_name}",
+        description=subtitle,
         color=discord.Color.green()
     )
     for index, player in enumerate(players_data, start=1):

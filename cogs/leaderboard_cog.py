@@ -79,7 +79,8 @@ class LeaderboardCog(commands.Cog):
                 logger.warning("tzdata not installed; falling back to UTC for leaderboard title.")
                 now = datetime.utcnow()
             month_name = now.strftime("%B %Y")
-            title = f"MONTHLY MOST SHOTS FIRED LEADERBOARD ({month_name})"
+            # Styled title, keep the word 'Leaderboard' for cleanup detection
+            title = f"🏆 {FOCUS_TITLE} Leaderboard • {month_name}"
 
             leaderboard_data = await self.calculate_leaderboard_data(FOCUS_STAT_KEY, now.year, now.month)
             await self.promote_class_a_citizens(leaderboard_data)
