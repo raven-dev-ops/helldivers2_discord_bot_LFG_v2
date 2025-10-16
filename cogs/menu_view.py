@@ -96,7 +96,7 @@ class SOSMenuView(discord.ui.View):
     #            ephemeral=True
     #        )
 
-    @discord.ui.button(label="REGISTER NAME", style=discord.ButtonStyle.primary, custom_id="register_button")
+    @discord.ui.button(label="REGISTER HELLDIVER", style=discord.ButtonStyle.primary, custom_id="register_button")
     async def register_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         register_modal_cog = self.bot.get_cog("RegisterModalCog")
         if register_modal_cog:
@@ -110,9 +110,29 @@ class SOSMenuView(discord.ui.View):
                 )
                 logging.error(f"Error in register_button: {e}")
         else:
-            logging.error("RegisterModalCog not found when pressing REGISTER. Ensure 'cogs.register_modal' loaded correctly.")
+            logging.error("RegisterModalCog not found when pressing REGISTER HELLDIVER. Ensure 'cogs.register_modal' loaded correctly.")
             await interaction.response.send_message(
                 "The registration system is not available at the moment. Please try again later.",
+                ephemeral=True
+            )
+
+    @discord.ui.button(label="REGISTER SHIP", style=discord.ButtonStyle.primary, custom_id="register_ship_button")
+    async def register_ship_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        register_modal_cog = self.bot.get_cog("RegisterModalCog")
+        if register_modal_cog:
+            try:
+                modal = register_modal_cog.get_register_ship_modal(interaction)
+                await interaction.response.send_modal(modal)
+            except Exception as e:
+                await interaction.response.send_message(
+                    "An error occurred while opening the ship registration modal. Please try again later.",
+                    ephemeral=True
+                )
+                logging.error(f"Error in register_ship_button: {e}")
+        else:
+            logging.error("RegisterModalCog not found when pressing REGISTER SHIP. Ensure 'cogs.register_modal' loaded correctly.")
+            await interaction.response.send_message(
+                "The ship registration system is not available at the moment. Please try again later.",
                 ephemeral=True
             )
 
@@ -280,7 +300,7 @@ class MenuViewCog(commands.Cog):
                 return
 
             embed_description = (
-                "- **REGISTER**: Register your Helldivers 2 player name.\n\n"
+                "- **REGISTER HELLDIVER**: Register your Helldivers 2 player name.\\n\\n- **REGISTER SHIP**: Register your ship name.\\n\\n"
                 "- **REPORT STATS**: Submit your screenshots for mission stats to the database.\n\n"
                 "- **WEBSITE**: Visit gptfleet.com for news, tools, and info.\n\n"
                 "- **STORE**: Support the fleet at gptfleet-shop.fourthwall.com.\n\n"
@@ -371,4 +391,8 @@ class MenuViewCog(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(MenuViewCog(bot))
+
+
+
+
 

@@ -1,4 +1,4 @@
-﻿import os
+import os
 import logging
 import discord
 from discord.ext import commands, tasks
@@ -80,7 +80,7 @@ class LeaderboardCog(commands.Cog):
                 now = datetime.utcnow()
             month_name = now.strftime("%B %Y")
             # Styled title, keep the word 'Leaderboard' for cleanup detection
-            title = f"🏆 {FOCUS_TITLE} Leaderboard • {month_name}"
+            title = f"?? {FOCUS_TITLE} Leaderboard � {month_name}"
 
             leaderboard_data = await self.calculate_leaderboard_data(FOCUS_STAT_KEY, now.year, now.month)
             await self.promote_class_a_citizens(leaderboard_data)
@@ -299,7 +299,7 @@ class LeaderboardCog(commands.Cog):
 
             # Player entries
             for idx, p in enumerate(batch, start=i*batch_size + 1):
-                name = (p['player_name'][:42] + "â€¦") if len(p['player_name']) > 43 else p['player_name']
+                name = (p['player_name'][:42] + "…") if len(p['player_name']) > 43 else p['player_name']
 
                 value_lines = [
                     f"**Kills:** {p['kills']}",
@@ -309,7 +309,7 @@ class LeaderboardCog(commands.Cog):
                     f"**Deaths:** {p['deaths']}",
                     f"**Melee Kills:** {p['melee_kills']}",
                     f"**Stims Used:** {p['stims_used']}",
-                    f"**Samples Extracted:** {p['samples_extracted']}",
+                    f"**SES:** {p['samples_extracted']}",
                     f"**Stratagems Used:** {p['stratagems_used']}",
                 ]
 
@@ -337,5 +337,6 @@ async def setup(bot):
     if not hasattr(bot, 'mongo_db'):
         raise RuntimeError("LeaderboardCog requires bot.mongo_db to be initialized.")
     await bot.add_cog(LeaderboardCog(bot))
+
 
 

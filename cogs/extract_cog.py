@@ -29,7 +29,8 @@ from config import (
     class_a_role_id,
 )
 from ocr_processing import process_for_ocr, clean_ocr_result
-from boundary_drawing import define_regions
+from boundary_drawing import define_regions, draw_boundaries
+import cv2
 
 logger = logging.getLogger(__name__)
 
@@ -111,13 +112,23 @@ class ConfirmationView(discord.ui.View):
             if leaderboard_cog:
                 asyncio.create_task(leaderboard_cog._run_leaderboard_update(force=True))
             monitor_embed = build_monitor_embed(                self.shared_data.players_data, self.shared_data.submitter_player_name, mission_id=mission_id            )
-            file_to_send = None
+            annotated_file = None
             if self.shared_data.screenshot_bytes and self.shared_data.screenshot_filename:
-                file_to_send = discord.File(BytesIO(self.shared_data.screenshot_bytes), filename=self.shared_data.screenshot_filename)
+                try:
+                    pil = Image.open(BytesIO(self.shared_data.screenshot_bytes)).convert('RGB')
+                    img_cv = np.array(pil)
+                    regions = define_regions(img_cv.shape)
+                    img_bgr = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
+                    annotated = draw_boundaries(img_bgr.copy(), regions)
+                    ok, buf = cv2.imencode('.png', annotated)
+                    if ok:
+                        annotated_file = discord.File(BytesIO(bytearray(buf)), filename=f"ocr_regions_{self.shared_data.screenshot_filename.rsplit('.',1)[0]}.png")
+                except Exception as e:
+                    logger.warning(f"Failed to annotate OCR regions for monitor image: {e}")
             monitor_channel = self.bot.get_channel(self.shared_data.monitor_channel_id)
             if monitor_channel:
-                if file_to_send:
-                    await monitor_channel.send(embed=monitor_embed, file=file_to_send)
+                if annotated_file:
+                    await monitor_channel.send(embed=monitor_embed, file=annotated_file)
                 else:
                     await monitor_channel.send(embed=monitor_embed)
             else:
