@@ -28,7 +28,7 @@ class SOSMenuView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
 
-    @discord.ui.button(label="STORE", style=discord.ButtonStyle.primary, custom_id="store_button")
+    @discord.ui.button(label="STORE", style=discord.ButtonStyle.secondary, custom_id="store_button", emoji="⭐")
     async def store_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             if not interaction.response.is_done():
@@ -108,7 +108,7 @@ class SOSMenuView(discord.ui.View):
 
 
     @discord.ui.button(
-        label="UPLOAD MISSION STATS",
+        label="UPLOAD MISSION",
         style=discord.ButtonStyle.success,
         custom_id="submit_stats_button"
     )
@@ -370,6 +370,5 @@ class MenuViewCog(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(MenuViewCog(bot))
-
 
 
