@@ -75,7 +75,7 @@ class GuildManagementCog(commands.Cog):
 
     async def setup_guild(self, guild: discord.Guild, force_refresh=False):
         # Ensure we use the exact category name requested
-        category_name = "GPT Network"
+        category_name = "GPT CLAN HUB"
         gpt_channel_name = "❗｜clan-menu"
         monitor_channel_name = "❗｜stat-reports"
         leaderboard_channel_name = "❗｜leaderboard"

@@ -302,9 +302,9 @@ class MenuViewCog(commands.Cog):
                 return
 
             embed_description = (
-                "REGISTER HELLDIVER: Register your Helldivers 2 player name.\n\n"
+                "- REGISTER HELLDIVER: Register your Helldivers 2 player name.\n\n"
                 "- REGISTER SHIP: Register your ship name.\n\n"
-                "- REPORT STATS: Submit your screenshots for mission stats to the database.\n\n"
+                "- UPLOAD MISSION STATS: Submit your screenshots for mission stats to the database.\n\n"
                 "- EDIT MISSION: Edit a previous mission by ID.\n\n"
                 "- WEBSITE: Visit gptfleet.com for news, tools, and info.\n\n"
                 "- STORE: Support the fleet at gptfleet-shop.fourthwall.com.\n\n"
