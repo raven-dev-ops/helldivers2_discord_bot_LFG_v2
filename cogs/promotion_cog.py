@@ -1,6 +1,6 @@
 from discord.ext import commands
 import logging
-from config import class_a_role_id, welcome_channel_id
+from config import class_a_role_id
 from database import get_mongo_client
 
 class PromotionCog(commands.Cog):
@@ -28,13 +28,8 @@ class PromotionCog(commands.Cog):
                 completed_missions = await self.get_completed_missions(member)
                 logging.info(f"Fetched completed missions for {member.display_name}: {completed_missions}")
                 if completed_missions is not None:
-                    welcome_channel = self.bot.get_channel(welcome_channel_id)
-                    if welcome_channel:
-                        await welcome_channel.send(
-                            f"Attention to orders: Helldiver {member.mention} has achieved **Class A Citizen**!"
-
-                        )
-                        logging.info(f"Announced promotion for {member.display_name} in the welcome channel.")
+                    # Announce via logs only; welcome channel announcements deprecated
+                    logging.info(f"Promotion: {member.display_name} achieved Class A Citizen.")
 
         except Exception as e:
             logging.error(f"Error handling role assignment for {member.display_name}: {e}")

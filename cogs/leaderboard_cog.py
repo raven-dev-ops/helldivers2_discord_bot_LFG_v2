@@ -6,34 +6,24 @@ import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from collections import defaultdict
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+try:
+    # Python <3.9 may not define this; catch broadly
+    from zoneinfo import ZoneInfoNotFoundError  # type: ignore
+except Exception:  # pragma: no cover
+    ZoneInfoNotFoundError = Exception  # Fallback type
 from config import class_a_role_id
 
-CATEGORY_NAME = "GPT NETWORK"
+CATEGORY_NAME = "GPT Network"
 LEADERBOARD_CHANNEL_NAME = "❗｜leaderboard"
 LEADERBOARD_IMAGE_PATH = "sos_leaderboard.png"
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 logger = logging.getLogger(__name__)
 
-# Each tuple: (label, stat_key)
-MONTHLY_FOCUSES = [
-    ("Most Average Kills", "average_kills"),    # JANUARY
-    ("Most Total Kills", "kills"),              # FEBRUARY
-    ("Most Melee Kills", "melee_kills"),        # MARCH
-    ("Most Shots Fired", "shots_fired"),        # APRIL
-    ("Least Deaths", "least_deaths"),           # MAY
-    ("Most Average Kills", "average_kills"),    # JUNE
-    ("Best Accuracy", "average_accuracy"),      # JULY (special stat)
-    ("Most Total Kills", "kills"),              # AUGUST
-    ("Most Melee Kills", "melee_kills"),        # SEPTEMBER
-    ("Most Shots Fired", "shots_fired"),        # OCTOBER
-    ("Least Deaths", "least_deaths"),           # NOVEMBER
-    ("Most Average Kills", "average_kills"),    # DECEMBER
-]
-
-def get_current_focus():
-    month_idx = datetime.utcnow().month - 1
-    return MONTHLY_FOCUSES[month_idx]
+# Fixed monthly focus per request
+FOCUS_TITLE = "Most Shots Fired"
+FOCUS_STAT_KEY = "shots_fired"
 
 class LeaderboardCog(commands.Cog):
     """Dynamic monthly leaderboard with correct visibility."""
@@ -66,27 +56,37 @@ class LeaderboardCog(commands.Cog):
         if force:
             logger.info("Forced leaderboard update requested.")
         async with self.leaderboard_lock:
-            focus_title, stat_key = get_current_focus()
-            now = datetime.utcnow()
+            # Use America/Chicago timezone for title display, fall back to UTC if tzdata missing
+            try:
+                now = datetime.now(ZoneInfo("America/Chicago"))
+            except ZoneInfoNotFoundError:
+                logger.warning("tzdata not installed; falling back to UTC for leaderboard title.")
+                now = datetime.utcnow()
             month_name = now.strftime("%B %Y")
-            title = f"MONTHLY {focus_title.upper()} LEADERBOARD ({month_name})"
-            
-            leaderboard_data = await self.calculate_leaderboard_data(stat_key, now.year, now.month)
+            title = f"MONTHLY MOST SHOTS FIRED LEADERBOARD ({month_name})"
+
+            leaderboard_data = await self.calculate_leaderboard_data(FOCUS_STAT_KEY, now.year, now.month)
             await self.promote_class_a_citizens(leaderboard_data)
-            embeds = await self.build_leaderboard_embeds(leaderboard_data, title, stat_key)
+            embeds = await self.build_leaderboard_embeds(leaderboard_data, title, FOCUS_STAT_KEY)
             for guild in self.bot.guilds:
                 channel = await self.ensure_leaderboard_channel(guild)
                 if not channel:
                     continue
-                # Clean up old leaderboard messages
+                # Clean up old leaderboard messages (targeted)
                 if channel.permissions_for(guild.me).manage_messages:
-                    async for msg in channel.history(limit=20):
-                        if msg.author == self.bot.user:
-                            try:
-                                await msg.delete()
-                                await asyncio.sleep(0.6)
-                            except Exception:
-                                pass
+                    try:
+                        async for msg in channel.history(limit=100):
+                            if msg.author != self.bot.user or not msg.embeds:
+                                continue
+                            title = (msg.embeds[0].title or "").upper()
+                            if "LEADERBOARD" in title:
+                                try:
+                                    await msg.delete()
+                                    await asyncio.sleep(0.6)
+                                except Exception:
+                                    pass
+                    except Exception as e:
+                        logger.warning(f"Failed to scan/delete old leaderboard messages in {guild.name}: {e}")
                 # Post leaderboard
                 if not embeds:
                     embed = discord.Embed(
@@ -130,7 +130,6 @@ class LeaderboardCog(commands.Cog):
         channel = discord.utils.get(guild.text_channels, name=LEADERBOARD_CHANNEL_NAME)
         category = discord.utils.get(guild.categories, name=CATEGORY_NAME)
         overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=True, send_messages=False),
             guild.me: discord.PermissionOverwrite(send_messages=True, embed_links=True, attach_files=True, manage_messages=True)
         }
         # Check for creation
@@ -142,16 +141,17 @@ class LeaderboardCog(commands.Cog):
         # Update overwrites on existing channel to ensure visibility
         elif channel:
             changed = False
-            # Make sure @everyone can see, but not send
-            current_ow = channel.overwrites_for(guild.default_role)
-            if current_ow.view_channel is not True or current_ow.send_messages not in [False, None]:
-                await channel.set_permissions(guild.default_role, view_channel=True, send_messages=False)
-                changed = True
             # Make sure bot can send
             bot_ow = channel.overwrites_for(guild.me)
             if not bot_ow.send_messages or not bot_ow.embed_links or not bot_ow.attach_files:
                 await channel.set_permissions(guild.me, send_messages=True, embed_links=True, attach_files=True, manage_messages=True)
                 changed = True
+            # Optionally sync with category to enforce Class B-only visibility
+            try:
+                if channel.category and channel.permissions_synced is False:
+                    await channel.edit(sync_permissions=True)
+            except Exception:
+                pass
             if changed:
                 logger.info(f"Updated overwrites for leaderboard channel in guild {guild.name} ({guild.id})")
         return channel
@@ -292,6 +292,9 @@ class LeaderboardCog(commands.Cog):
                 value="[gptfleet.com](https://gptfleet.com)",
                 inline=False
             )
+
+            # Footer about MVP award
+            embed.set_footer(text="Rank #1 will win the @MVP role at the end of the month.")
 
             embeds.append(embed)
 

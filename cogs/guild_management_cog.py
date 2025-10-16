@@ -74,12 +74,11 @@ class GuildManagementCog(commands.Cog):
         return target_channel
 
     async def setup_guild(self, guild: discord.Guild, force_refresh=False):
-        category_name = "GPT NETWORK"
+        # Ensure we use the exact category name requested
+        category_name = "GPT Network"
         gpt_channel_name = "❗｜clan-menu"
         monitor_channel_name = "❗｜stat-reports"
         leaderboard_channel_name = "❗｜leaderboard"
-        sos_lfg_role_name = "NET PING!"
-        sos_lfg_role_color = 0xfaee10
 
         target_channel_names = {gpt_channel_name, monitor_channel_name, leaderboard_channel_name}
         logging.info(f"Starting setup for guild: {guild.name} (ID: {guild.id})")
@@ -100,23 +99,41 @@ class GuildManagementCog(commands.Cog):
 
         logging.info(f"Bot has sufficient permissions for setup in guild '{guild.name}'. Proceeding.")
 
+        # Resolve or create the Class B Citizens role
+        class_b = discord.utils.get(guild.roles, name="Class B Citizens")
+        if class_b is None:
+            try:
+                class_b = await guild.create_role(name="Class B Citizens", reason="Required for GPT Network access")
+                logging.info(f"Created role 'Class B Citizens' in guild '{guild.name}'.")
+            except Exception as e:
+                logging.error(f"Failed to ensure 'Class B Citizens' role in guild '{guild.name}': {e}")
+
+        # Lock category to Class B Citizens only
         category_overwrites = {
-            guild.default_role: discord.PermissionOverwrite(
-                view_channel=True,
-                read_message_history=True,
-                send_messages=False,
-                connect=True,
-                add_reactions=False
-            ),
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            class_b: discord.PermissionOverwrite(view_channel=True) if class_b else None,
             bot_member: discord.PermissionOverwrite(
                 view_channel=True,
                 send_messages=True,
                 add_reactions=True,
-                read_message_history=True
+                read_message_history=True,
+                manage_messages=True
             )
         }
+        # Remove any None entries if class_b creation failed
+        category_overwrites = {k: v for k, v in category_overwrites.items() if v is not None}
 
+        # Try exact match first, then migrate from legacy 'GPT NETWORK' if present
         category = discord.utils.get(guild.categories, name=category_name)
+        if not category:
+            legacy = discord.utils.get(guild.categories, name="GPT NETWORK")
+            if legacy:
+                try:
+                    await legacy.edit(name=category_name)
+                    logging.info(f"Renamed legacy category 'GPT NETWORK' to '{category_name}' in guild '{guild.name}'.")
+                    category = legacy
+                except Exception as e:
+                    logging.warning(f"Failed to rename legacy category in guild '{guild.name}': {e}")
         if not category:
             try:
                 category = await guild.create_category(
@@ -132,6 +149,15 @@ class GuildManagementCog(commands.Cog):
             try:
                 await category.edit(overwrites=category_overwrites, reason="Updating category overwrites.")
                 logging.info(f"Updated permission overwrites for category '{category.name}' (ID: {category.id}).")
+                # Sync permissions down to channels in the category
+                try:
+                    for ch in category.channels:
+                        try:
+                            await ch.edit(sync_permissions=True)
+                        except Exception as e:
+                            logging.warning(f"Failed to sync permissions for channel '{ch.name}' (ID: {ch.id}) in category '{category.name}': {e}")
+                except Exception:
+                    pass
             except Exception as e:
                 logging.warning(f"Could not update category overwrites for '{category_name}': {e}")
 
@@ -158,20 +184,9 @@ class GuildManagementCog(commands.Cog):
             else:
                 logging.debug(f"Skipping non-text channel '{channel.name}' (ID: {channel.id}) in category '{category.name}'.")
 
+        # Channels inherit from category; ensure bot can post
         gpt_channel_overwrites = {
-            guild.default_role: discord.PermissionOverwrite(
-                view_channel=True,
-                read_message_history=True,
-                send_messages=True,
-                attach_files=True,
-                add_reactions=False
-            ),
-            bot_member: discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                add_reactions=True,
-                read_message_history=True
-            )
+            bot_member: discord.PermissionOverwrite(view_channel=True, send_messages=True, add_reactions=True, read_message_history=True)
         }
         gpt_channel = await self._find_and_clean_specific_channel(
             guild,
@@ -201,47 +216,19 @@ class GuildManagementCog(commands.Cog):
             except Exception as e:
                 logging.error(f"Error creating/finding invite link for '#{gpt_channel_name}': {e}")
 
-        sos_lfg_role = discord.utils.get(guild.roles, name=sos_lfg_role_name)
-        if not sos_lfg_role:
-            try:
-                permissions = discord.Permissions.none()
-                sos_lfg_role = await guild.create_role(
-                    name=sos_lfg_role_name,
-                    mentionable=True,
-                    permissions=permissions,
-                    color=discord.Color(sos_lfg_role_color),
-                    reason="Role for pinging users interested in SOS LFG."
-                )
-                logging.info(f"Created role '{sos_lfg_role_name}' (ID: {sos_lfg_role.id}) in guild '{guild.name}' with color {hex(sos_lfg_role_color)}.")
-            except Exception as e:
-                logging.error(f"Error creating role '{sos_lfg_role_name}' in guild '{guild.name}': {e}")
-        else:
-            logging.info(f"Role '{sos_lfg_role_name}' (ID: {sos_lfg_role.id}) already exists in guild '{guild.name}'.")
-            if sos_lfg_role.color != discord.Color(sos_lfg_role_color):
+        # Delete deprecated ping roles if present
+        for deprecated_name in ("NET PING!", "SOS PING!"):
+            role_obj = discord.utils.get(guild.roles, name=deprecated_name)
+            if role_obj:
                 try:
-                    await sos_lfg_role.edit(color=discord.Color(sos_lfg_role_color), reason=f"Updating color for {sos_lfg_role_name} role.")
-                    logging.info(f"Updated color for role '{sos_lfg_role_name}' (ID: {sos_lfg_role.id}) to {hex(sos_lfg_role_color)} in guild '{guild.name}'.")
+                    await role_obj.delete(reason="Deprecated ping role")
+                    logging.info(f"Deleted deprecated role '{deprecated_name}' in guild '{guild.name}'.")
                 except Exception as e:
-                    logging.error(f"Failed to update color for role '{sos_lfg_role_name}' (ID: {sos_lfg_role.id}) in guild '{guild.name}': {e}")
+                    logging.warning(f"Failed to delete deprecated role '{deprecated_name}' in guild '{guild.name}': {e}")
 
         monitor_overwrites = {
-            guild.default_role: discord.PermissionOverwrite(
-                view_channel=False,
-                read_message_history=False,
-                send_messages=False,
-                add_reactions=False
-            ),
-            bot_member: discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                add_reactions=True,
-                read_message_history=True
-            )
+            bot_member: discord.PermissionOverwrite(view_channel=True, send_messages=True, add_reactions=True, read_message_history=True)
         }
-        if sos_lfg_role:
-            monitor_overwrites[sos_lfg_role] = discord.PermissionOverwrite(
-                view_channel=False
-            )
 
         monitor_channel = await self._find_and_clean_specific_channel(
             guild,
@@ -254,26 +241,8 @@ class GuildManagementCog(commands.Cog):
             logging.warning(f"Failed to setup '#{monitor_channel_name}' channel in guild '{guild.name}'.")
 
         leaderboard_overwrites = {
-            guild.default_role: discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=False,
-                add_reactions=False,
-                read_message_history=True
-            ),
-            bot_member: discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                add_reactions=True,
-                read_message_history=True
-            )
+            bot_member: discord.PermissionOverwrite(view_channel=True, send_messages=True, add_reactions=True, read_message_history=True)
         }
-        if sos_lfg_role:
-            leaderboard_overwrites[sos_lfg_role] = discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=False,
-                add_reactions=False,
-                read_message_history=True
-            )
 
         leaderboard_channel = await self._find_and_clean_specific_channel(
             guild,
@@ -292,7 +261,6 @@ class GuildManagementCog(commands.Cog):
             "category_id": category.id if category else None,
             "gpt_channel_id": gpt_channel.id if gpt_channel else None,
             "discord_invite_link": discord_invite_link,
-            "sos_lfg_role_id": sos_lfg_role.id if sos_lfg_role else None,
             "monitor_channel_id": monitor_channel.id if monitor_channel else None,
             "leaderboard_channel_id": leaderboard_channel.id if leaderboard_channel else None,
         }

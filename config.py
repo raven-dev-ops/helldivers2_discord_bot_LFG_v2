@@ -59,7 +59,6 @@ def _get_int_env(var_name: str, default: int | None = None) -> int | None:
         return default
 
 class_b_role_id = _get_int_env('CLASS_B_ROLE_ID')
-welcome_channel_id = _get_int_env('WELCOME_CHANNEL_ID')
 monitor_channel_id = _get_int_env('MONITOR_CHANNEL_ID')
 leaderboard_channel_id = _get_int_env('LEADERBOARD_CHANNEL_ID')
 kia_channel_id = _get_int_env('KIA_CHANNEL_ID')

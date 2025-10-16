@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 import logging
-from config import welcome_channel_id, class_b_role_id, guild_id
+from config import class_b_role_id, guild_id
 from utils import log_to_monitor_channel
 from datetime import datetime
 
@@ -11,25 +11,11 @@ class ArrivalCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        """Welcomes a new member, assigns a role, and registers them."""
+        """Assign role (if configured) and register/upsert the member. No welcome messages."""
         try:
             # Restrict welcomes to the configured guild only
             if not guild_id or member.guild.id != guild_id:
                 return
-
-            # IMPORTANT: fetch the channel from the SAME guild
-            welcome_channel = member.guild.get_channel(welcome_channel_id)
-            if not welcome_channel:
-                logging.error(
-                    f"[ArrivalCog] Welcome channel {welcome_channel_id} not found in guild {member.guild.id}."
-                )
-                return
-
-            await welcome_channel.send(
-                (
-                    f"Welcome {member.mention} to the front lines!\n"
-                )
-            )
 
             # Assign the Class B Citizen role
             role = member.guild.get_role(class_b_role_id)
@@ -40,7 +26,6 @@ class ArrivalCog(commands.Cog):
                 logging.error(
                     f"[ArrivalCog] Role {class_b_role_id} not found in guild {member.guild.id}."
                 )
-                return  # Stop if role not found
 
             # Register the user in the Alliance collection
             alliance_collection = self.bot.mongo_db['Alliance']
@@ -69,10 +54,10 @@ class ArrivalCog(commands.Cog):
                 )
 
         except Exception as e:
-            logging.error(f"[ArrivalCog] Error welcoming/ registering {member.display_name}: {e}")
+            logging.error(f"[ArrivalCog] Error registering {member.display_name}: {e}")
             await log_to_monitor_channel(
                 self.bot,
-                f"Error welcoming or registering new member {member.display_name}: {e}",
+                f"Error registering new member {member.display_name}: {e}",
                 logging.ERROR
             )
 

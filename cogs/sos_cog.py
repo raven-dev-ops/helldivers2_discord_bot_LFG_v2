@@ -38,7 +38,7 @@ class SOSCog(commands.Cog):
         # and setup failed, but can be useful for operations beyond initial setup.
         # Added mention_roles check here as it's used in process_sos broadcast.
         permissions = guild.me.guild_permissions
-        required_perms = ["manage_channels", "send_messages", "embed_links", "mention_roles"]
+        required_perms = ["manage_channels", "send_messages", "embed_links"]
         missing_perms = [
             perm for perm in required_perms if not getattr(permissions, perm, False)
         ]
@@ -48,7 +48,7 @@ class SOSCog(commands.Cog):
             # during broadcast where specific channel perms matter.
             pass # Just log, don't block the whole process_sos attempt
 
-    async def get_or_create_category(self, guild: discord.Guild, category_name: str = "GPT NETWORK"):
+    async def get_or_create_category(self, guild: discord.Guild, category_name: str = "GPT Network"):
         """Retrieves or creates a dedicated category for GPT voice channels."""
         # This logic should ideally be handled by GuildManagementCog during setup
         # and the category ID stored/retrieved from the database.
@@ -179,7 +179,7 @@ class SOSCog(commands.Cog):
             # Using get_or_create_category here maintains existing logic but is inconsistent
             # with GuildManagementCog's single source of truth approach via DB.
             # Consider refactoring this to use the category ID from the database if available.
-            # category = await self.get_or_create_category(host_guild, "GPT NETWORK")
+            # category = await self.get_or_create_category(host_guild, "GPT Network")
             # if not category:
             #    # If category couldn't be found/created in the host guild, voice channel creation might fail
             #    logging.warning(f"Could not get/create GPT NETWORK category in host guild '{host_guild.name}'. Voice channel creation might fail.")
@@ -188,7 +188,7 @@ class SOSCog(commands.Cog):
 
             # Generate unique name for the voice channel in the host guild
             # This logic is specific to the host guild where the SOS is initiated
-            category = discord.utils.get(host_guild.categories, name="GPT NETWORK") # Try to get category
+            category = discord.utils.get(host_guild.categories, name="GPT Network") # Try to get category
             # If category doesn't exist or bot can't manage channels, voice channel creation might fail below.
             # The error handling around voice channel creation will catch this.
 
@@ -300,8 +300,8 @@ class SOSCog(commands.Cog):
 
             # Broadcast to all known GPT channels in the network
             server_listing = self.bot.mongo_db['Server_Listing']
-            # Fetch only necessary fields to minimize data transfer, including the role ID
-            all_servers_cursor = server_listing.find({}, {"discord_server_id": 1, "gpt_channel_id": 1, "sos_lfg_role_id": 1})
+            # Fetch only necessary fields to minimize data transfer
+            all_servers_cursor = server_listing.find({}, {"discord_server_id": 1, "gpt_channel_id": 1})
             all_servers_data = await all_servers_cursor.to_list(None)
 
             logging.info(f"Broadcasting SOS to {len(all_servers_data)} configured servers.")
@@ -309,7 +309,7 @@ class SOSCog(commands.Cog):
             for server_data in all_servers_data:
                 server_guild_id = server_data.get("discord_server_id")
                 server_gpt_channel_id = server_data.get("gpt_channel_id")
-                sos_lfg_role_id = server_data.get("sos_lfg_role_id") # Get role ID from DB
+                # Deprecated ping roles are no longer used
 
                 server_guild = self.bot.get_guild(server_guild_id)
                 if not server_guild:
@@ -321,29 +321,8 @@ class SOSCog(commands.Cog):
                     logging.warning(f"GPT channel configured in DB (ID: {server_gpt_channel_id}) not found in guild '{server_guild.name}'. Skipping broadcast.")
                     continue
 
-                # --- Prepare Ping Content ---
+                # --- Prepare Ping Content (deprecated) ---
                 ping_content = ""
-                if sos_lfg_role_id:
-                    sos_lfg_role = server_guild.get_role(sos_lfg_role_id)
-                    # Check if role exists, is mentionable, AND bot has permission to mention roles in this channel
-                    if sos_lfg_role and sos_lfg_role.mentionable:
-                         # Check bot's permission in the *specific channel* where the message is sent
-                         # This check requires discord.py 2.0+
-                         try:
-                             if server_gpt_channel.permissions_for(server_guild.me).mention_roles:
-                                 ping_content = sos_lfg_role.mention
-                                 logging.debug(f"Bot has mention_roles permission in '{server_guild.name}' channel '{server_gpt_channel.name}'. Adding SOS LFG role mention.")
-                             else:
-                                 logging.warning(f"Bot lacks 'Mention Roles' permission in channel '{server_gpt_channel.name}' ({server_gpt_channel.id}) in guild '{server_guild.name}'. Cannot ping SOS LFG role.")
-                                 # ping_content remains ""
-                         except AttributeError:
-                              logging.warning(f"discord.py version does not support 'mention_roles' permission check in guild '{server_guild.name}'. Attempting ping anyway.")
-                              # If the attribute doesn't exist, assume it might work or fail on send
-                              ping_content = sos_lfg_role.mention # Attempt to include mention, discord.py will raise Forbidden on send if not allowed.
-
-
-                    elif sos_lfg_role_id and not sos_lfg_role:
-                         logging.warning(f"SOS LFG role ID {sos_lfg_role_id} found in DB but role object not found in guild '{server_guild.name}'. Cannot ping.")
 
 
                 try:
@@ -352,9 +331,8 @@ class SOSCog(commands.Cog):
                          logging.warning(f"Bot lacks 'Send Messages' permission in channel '{server_gpt_channel.name}' ({server_gpt_channel.id}) in guild '{server_guild.name}'. Cannot send SOS embed.")
                          continue # Skip this guild if cannot send messages
 
-                    # Send the message with the optional ping_content AND the embed
-                    # discord.py will handle Forbidden for mentions if somehow the permission check above is insufficient
-                    sos_message = await server_gpt_channel.send(content=ping_content, embed=embed)
+                    # Send the message without any role pings
+                    sos_message = await server_gpt_channel.send(embed=embed)
                     sos_data['sos_messages'][server_guild.id] = sos_message
                     logging.info(f"Sent SOS embed {'with' if ping_content else 'without'} ping to guild '{server_guild.name}'.")
                 except discord.Forbidden:
