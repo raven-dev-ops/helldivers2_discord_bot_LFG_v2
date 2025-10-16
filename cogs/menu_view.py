@@ -23,7 +23,7 @@ class SOSMenuView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
 
-    @discord.ui.button(label="WEBSITE", style=discord.ButtonStyle.secondary, custom_id="website_button")
+    @discord.ui.button(label="WEBSITE", style=discord.ButtonStyle.primary, custom_id="website_button")
     async def website_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             if not interaction.response.is_done():
@@ -35,7 +35,7 @@ class SOSMenuView(discord.ui.View):
             await interaction.followup.send("Unable to open website right now.", ephemeral=True)
             logging.error(f"Error in website_button: {e}")
 
-    @discord.ui.button(label="STORE", style=discord.ButtonStyle.secondary, custom_id="store_button")
+    @discord.ui.button(label="STORE", style=discord.ButtonStyle.primary, custom_id="store_button")
     async def store_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             if not interaction.response.is_done():
