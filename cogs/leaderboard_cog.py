@@ -80,7 +80,7 @@ class LeaderboardCog(commands.Cog):
                 now = datetime.utcnow()
             month_name = now.strftime("%B %Y")
             # Styled title, keep the word 'Leaderboard' for cleanup detection
-            title = f"?? {FOCUS_TITLE} Leaderboard • {month_name}"
+            title = f"Most Shots Fired Leaderboard - {month_name}"
 
             leaderboard_data = await self.calculate_leaderboard_data(FOCUS_STAT_KEY, now.year, now.month)
             await self.promote_class_a_citizens(leaderboard_data)
