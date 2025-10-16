@@ -1,4 +1,5 @@
 import os
+from dotenv import load_dotenv
 import logging
 import discord
 import traceback
@@ -70,6 +71,8 @@ async def load_cogs():
 if __name__ == '__main__':
     import asyncio
 
+    # Load .env for local/dev environments (Heroku will use Config Vars)
+    load_dotenv()
     token = os.environ.get('DISCORD_TOKEN')
     mongo_uri = os.environ.get('MONGODB_URI')
     db_name = 'GPTHellbot'
