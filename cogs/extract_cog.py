@@ -262,7 +262,11 @@ class RegisterMissingView(discord.ui.View):
         self.guild_id = guild_id
         options = []
         for idx, p in enumerate(self.shared_data.missing_players):
-            label = p.get('unregistered_name', f"Missing {idx+1}") or f"Missing {idx+1}"
+            # Sanitize label: strip whitespace and fallback to 'Missing N' when empty
+            raw_label = p.get('unregistered_name')
+            label = (str(raw_label).strip() if raw_label is not None else '')
+            if not label:
+                label = f"Missing {idx+1}"
             options.append(discord.SelectOption(label=label[:100], value=str(idx)))
         self.add_item(RegisterMissingSelect(options, self))
 
@@ -278,7 +282,8 @@ class RegisterMissingSelect(discord.ui.Select):
             if sel < 0 or sel >= len(missing):
                 await interaction.response.send_message("Invalid selection.", ephemeral=True)
                 return
-            default_name = missing[sel].get('unregistered_name', '') or ''
+            # Use a trimmed default name for suggestions; allow empty string
+            default_name = str(missing[sel].get('unregistered_name', '') or '').strip()
             # If the editor is in a voice channel, offer picking a member to auto-fill ID
             voice_channel = getattr(getattr(interaction.user, 'voice', None), 'channel', None)
             if voice_channel and isinstance(voice_channel, discord.VoiceChannel):
@@ -728,8 +733,13 @@ class ExtractCog(commands.Cog):
             for p in players_data:
                 if not p.get('player_name'):
                     mp = p.copy()
-                    if not mp.get('unregistered_name'):
-                        mp['unregistered_name'] = mp.get('player_name') or 'Unknown'
+                    # Ensure a usable label for UI: treat whitespace-only as missing
+                    unreg = mp.get('unregistered_name')
+                    if not unreg or not str(unreg).strip():
+                        mp['unregistered_name'] = (mp.get('player_name') or 'Unknown')
+                    else:
+                        # Normalize to a trimmed string to avoid Discord validation errors
+                        mp['unregistered_name'] = str(unreg).strip()
                     missing_players.append(mp)
             players_data = [p for p in players_data if p.get('player_name')]
             logger.info(f"After matching against DB, {len(players_data)} registered players remain.")
