@@ -54,6 +54,16 @@ def perform_ocr(segment, label):
             text = pytesseract.image_to_string(preprocessed_segment, config=custom_config).strip()
             logger.info(f"OCR raw text for label '{label}': '{text}'")
             if text:
+                # Heuristic second pass for zero-prone fields misread as '8'
+                if label in {"Melee Kills", "Samples Extracted"} and text in {"8", "88"}:
+                    try:
+                        cfg_no8 = r'--oem 3 --psm 10 -c tessedit_char_whitelist=0123456789 -c tessedit_char_blacklist=8'
+                        text2 = pytesseract.image_to_string(preprocessed_segment, config=cfg_no8).strip()
+                        logger.info(f"OCR recheck (no '8') for '{label}': '{text2}'")
+                        if text2 and text2 != text:
+                            return text2
+                    except Exception as e:
+                        logger.warning(f"Secondary OCR pass failed for '{label}': {e}")
                 return text
         return None
     except Exception as e:
@@ -86,9 +96,13 @@ def clean_ocr_result(text, label):
         text = re.sub(r'[^A-Za-z0-9\s]', ' ', text)
     elif label in NUMERIC_FIELDS:
         # Aggressive OCR correction for digits-only fields
+        # Cautious mappings; avoid biasing zeros to eights
         text = (text.replace('O', '0').replace('o', '0')
                     .replace('l', '1').replace('I', '1')
-                    .replace('B', '8').replace('S', '5'))
+                    .replace('S', '5'))
+        # For fields that are frequently 0, avoid auto-mapping 'B'->'8'
+        if label not in {"Melee Kills", "Samples Extracted"}:
+            text = text.replace('B', '8')
         text = re.sub(r'[^\d]', '', text)
     elif label == "Accuracy":
         text = re.sub(r'[^\d\.%]', '', text)
