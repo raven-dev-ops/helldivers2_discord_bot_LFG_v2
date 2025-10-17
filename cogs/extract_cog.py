@@ -211,6 +211,31 @@ class ConfirmationView(discord.ui.View):
             if not interaction.response.is_done():
                 await interaction.response.send_message("Unable to open registration flow.", ephemeral=True)
 
+    async def edit_player_selection(self, interaction: discord.Interaction):
+        try:
+            options = []
+            for i, player in enumerate(self.shared_data.players_data):
+                p_name = player.get('player_name', 'Unknown') or "Unknown"
+                options.append(
+                    discord.SelectOption(
+                        label=f"Player {i + 1}",
+                        description=p_name,
+                        value=str(i)
+                    )
+                )
+            player_select = PlayerSelect(options, self.shared_data, self.bot)
+            view = discord.ui.View()
+            view.add_item(player_select)
+            await interaction.response.edit_message(
+                content="Choose a player to edit:",
+                embeds=[],
+                view=view
+            )
+        except Exception as e:
+            logger.error(f"Error in edit_player_selection: {e}")
+            if not interaction.response.is_done():
+                await interaction.response.send_message("An error occurred while editing.", ephemeral=True)
+
     
 
 class RegisterMissingView(discord.ui.View):
