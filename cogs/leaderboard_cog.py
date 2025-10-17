@@ -189,6 +189,7 @@ class LeaderboardCog(commands.Cog):
                         )
                 except Exception as e:
                     logger.warning(f"Failed to store leaderboard_message_ids for {guild.name}: {e}")
+                logger.info(f"Posted {len(new_ids)} leaderboard message(s) in {guild.name}#{getattr(channel, 'name', '?')} ({getattr(channel, 'id', '?')}).")
 
                 # Pinning not required per request; no action here.
 
@@ -220,48 +221,76 @@ class LeaderboardCog(commands.Cog):
     async def ensure_leaderboard_channel(self, guild: discord.Guild):
         # Try to get channel by stored ID first, then by name
         channel = None
+        server_listing = None
+        category = None
+        class_b = discord.utils.get(guild.roles, name="Class B Citizens")
         try:
             if hasattr(self.bot, 'mongo_db'):
                 server_listing = self.bot.mongo_db['Server_Listing']
-                doc = await server_listing.find_one({"discord_server_id": guild.id}, {"leaderboard_channel_id": 1})
+                doc = await server_listing.find_one({"discord_server_id": guild.id}, {"leaderboard_channel_id": 1, "category_id": 1})
                 lb_id = (doc or {}).get("leaderboard_channel_id")
+                cat_id = (doc or {}).get("category_id")
+                if cat_id:
+                    cat_obj = guild.get_channel(int(cat_id))
+                    if isinstance(cat_obj, discord.CategoryChannel):
+                        category = cat_obj
                 if lb_id:
                     ch = guild.get_channel(int(lb_id))
                     if isinstance(ch, discord.TextChannel):
                         channel = ch
         except Exception:
             pass
+
+        if category is None:
+            # Fallback category by known names
+            for name in ("GPT CLAN HUB", CATEGORY_NAME):
+                category = discord.utils.get(guild.categories, name=name)
+                if category:
+                    break
+
         if channel is None:
             channel = next((c for c in guild.text_channels if c.name in ALTERNATE_LEADERBOARD_NAMES), None)
-        category = discord.utils.get(guild.categories, name=CATEGORY_NAME)
-        overwrites = {
-            guild.me: discord.PermissionOverwrite(send_messages=True, embed_links=True, attach_files=True, manage_messages=True)
-        }
-        # Check for creation
-        if not category and guild.me.guild_permissions.manage_channels:
-            category = await guild.create_category(CATEGORY_NAME)
+
+        # Build overwrites: only Class B can view; bot can post/manage
+        overwrites = {guild.default_role: discord.PermissionOverwrite(view_channel=False)}
+        if class_b:
+            overwrites[class_b] = discord.PermissionOverwrite(view_channel=True, read_message_history=True)
+        overwrites[guild.me] = discord.PermissionOverwrite(
+            view_channel=True, send_messages=True, embed_links=True, attach_files=True, manage_messages=True
+        )
+
+        # Create if missing
         if not channel and guild.me.guild_permissions.manage_channels:
             channel = await guild.create_text_channel(
                 LEADERBOARD_CHANNEL_NAME, category=category, overwrites=overwrites)
-        # Update overwrites on existing channel to ensure visibility and correct naming
+            # Persist channel id
+            try:
+                if server_listing is not None:
+                    await server_listing.update_one(
+                        {"discord_server_id": guild.id},
+                        {"$set": {"leaderboard_channel_id": int(channel.id)}},
+                        upsert=True
+                    )
+            except Exception:
+                pass
         elif channel:
             changed = False
-            # Normalize name to the expected one
+            # Normalize name
             if channel.name != LEADERBOARD_CHANNEL_NAME and guild.me.guild_permissions.manage_channels:
                 try:
                     await channel.edit(name=LEADERBOARD_CHANNEL_NAME, reason="Normalize leaderboard channel name")
                     changed = True
                 except Exception:
                     pass
-            # Make sure bot can send
-            bot_ow = channel.overwrites_for(guild.me)
-            if not bot_ow.send_messages or not bot_ow.embed_links or not bot_ow.attach_files:
-                await channel.set_permissions(guild.me, send_messages=True, embed_links=True, attach_files=True, manage_messages=True)
-                changed = True
-            # Optionally sync with category to enforce Class B-only visibility
+            # Ensure visibility and bot perms
             try:
-                if channel.category and channel.permissions_synced is False:
-                    await channel.edit(sync_permissions=True)
+                await channel.set_permissions(guild.default_role, view_channel=False)
+                if class_b:
+                    await channel.set_permissions(class_b, view_channel=True, read_message_history=True)
+                await channel.set_permissions(guild.me, view_channel=True, send_messages=True, embed_links=True, attach_files=True, manage_messages=True)
+                if category and channel.category != category and guild.me.guild_permissions.manage_channels:
+                    await channel.edit(category=category)
+                changed = True
             except Exception:
                 pass
             if changed:
