@@ -229,6 +229,15 @@ class RegisterMissingSelect(discord.ui.Select):
                 await interaction.response.send_message("Invalid selection.", ephemeral=True)
                 return
             default_name = missing[sel].get('unregistered_name', '') or ''
+            # If the editor is in a voice channel, offer picking a member to auto-fill ID
+            voice_channel = getattr(getattr(interaction.user, 'voice', None), 'channel', None)
+            if voice_channel and isinstance(voice_channel, discord.VoiceChannel):
+                members = [m for m in voice_channel.members if not m.bot]
+                if members:
+                    view = VoiceMemberPickView(self.parent.shared_data, self.parent.bot, self.parent.guild_id, sel, default_name, members)
+                    await interaction.response.send_message("Pick a voice member to pre-fill Discord ID, or press Manual Entry:", view=view, ephemeral=True)
+                    return
+            # Fallback: open modal without suggestion
             modal = RegisterPlayerModal(self.parent.shared_data, self.parent.bot, self.parent.guild_id, sel, default_name)
             await interaction.response.send_modal(modal)
         except Exception as e:
@@ -236,11 +245,45 @@ class RegisterMissingSelect(discord.ui.Select):
             if not interaction.response.is_done():
                 await interaction.response.send_message("Failed to open registration modal.", ephemeral=True)
 
+class VoiceMemberPickView(discord.ui.View):
+    def __init__(self, shared_data: SharedData, bot: commands.Bot, guild_id: int, missing_index: int, default_name: str, members: list[discord.Member]):
+        super().__init__(timeout=120)
+        self.shared_data = shared_data
+        self.bot = bot
+        self.guild_id = guild_id
+        self.missing_index = missing_index
+        self.default_name = default_name
+        # Build options from voice members
+        options = []
+        for m in members[:25]:
+            label = (m.display_name or m.name)[:100]
+            options.append(discord.SelectOption(label=label, description=str(m.id)[:100], value=str(m.id)))
+        self.add_item(VoiceMemberSelect(options, self))
+
+    @discord.ui.button(label="Manual Entry", style=discord.ButtonStyle.secondary)
+    async def manual(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = RegisterPlayerModal(self.shared_data, self.bot, self.guild_id, self.missing_index, self.default_name)
+        await interaction.response.send_modal(modal)
+
+class VoiceMemberSelect(discord.ui.Select):
+    def __init__(self, options, parent: VoiceMemberPickView):
+        super().__init__(placeholder="Select a voice member", options=options, min_values=1, max_values=1)
+        self.parent = parent
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            picked_id = int(self.values[0])
+            modal = RegisterPlayerModal(self.parent.shared_data, self.parent.bot, self.parent.guild_id, self.parent.missing_index, self.parent.default_name, default_discord_id=picked_id)
+            await interaction.response.send_modal(modal)
+        except Exception as e:
+            logger.error(f"Error in VoiceMemberSelect: {e}")
+            await interaction.response.send_message("Failed to open modal.", ephemeral=True)
+
 class RegisterPlayerModal(discord.ui.Modal, title="Register Player"):
     discord_id = discord.ui.TextInput(label="Discord ID (numbers)", placeholder="e.g. 123456789012345678", required=True, max_length=20)
     player_name = discord.ui.TextInput(label="Helldiver Name", placeholder="Exact in-game name", required=True, max_length=50)
 
-    def __init__(self, shared_data: SharedData, bot: commands.Bot, guild_id: int, missing_index: int, default_name: str):
+    def __init__(self, shared_data: SharedData, bot: commands.Bot, guild_id: int, missing_index: int, default_name: str, default_discord_id: int | None = None):
         super().__init__()
         self.shared_data = shared_data
         self.bot = bot
@@ -249,6 +292,11 @@ class RegisterPlayerModal(discord.ui.Modal, title="Register Player"):
         try:
             # Pre-fill name if available
             self.player_name.default = default_name
+        except Exception:
+            pass
+        try:
+            if default_discord_id is not None:
+                self.discord_id.default = str(int(default_discord_id))
         except Exception:
             pass
 
