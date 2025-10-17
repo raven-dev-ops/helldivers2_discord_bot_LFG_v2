@@ -391,8 +391,16 @@ class RegisterPlayerModal(discord.ui.Modal, title="Register Player"):
                 await interaction.response.send_message("Failed to register player in database.", ephemeral=True)
                 return
             # Transform missing entry into a registered player row
+            mp = {}
             try:
-                mp = self.shared_data.missing_players.pop(self.missing_index)
+                if self.missing_index is not None:
+                    mp = self.shared_data.missing_players.pop(self.missing_index)
+                else:
+                    # If manual path and we still have any unresolved/blank row, use its stats
+                    for i, cand in enumerate(list(self.shared_data.missing_players)):
+                        if not cand.get('player_name'):
+                            mp = self.shared_data.missing_players.pop(i)
+                            break
             except Exception:
                 mp = {}
             stats_row = {
