@@ -203,10 +203,25 @@ class ConfirmationView(discord.ui.View):
         try:
             missing = self.shared_data.missing_players or []
             if not missing:
-                await interaction.response.send_message("No missing players to register.", ephemeral=True)
-                return
-            view = RegisterMissingView(self.shared_data, self.bot, interaction.guild_id)
-            await interaction.response.send_message("Select a missing player to register:", view=view, ephemeral=True)
+                # No detected missing players — still allow manual/guild/voice registration
+                voice_channel = getattr(getattr(interaction.user, 'voice', None), 'channel', None)
+                members = []
+                if voice_channel and isinstance(voice_channel, discord.VoiceChannel):
+                    members = [m for m in voice_channel.members if not m.bot and m.id != interaction.user.id]
+                if members:
+                    view = MemberPickView(self.shared_data, self.bot, interaction.guild_id, None, "", members, title="Pick a voice member")
+                    await interaction.response.send_message(
+                        "Pick a voice member to pre-fill Discord ID, or press Manual Entry:",
+                        view=view,
+                        ephemeral=True
+                    )
+                    return
+                # Fallback to manual entry (and the modal allows typing any Discord ID)
+                modal = RegisterPlayerModal(self.shared_data, self.bot, interaction.guild_id, None, "")
+                await interaction.response.send_modal(modal)
+            else:
+                view = RegisterMissingView(self.shared_data, self.bot, interaction.guild_id)
+                await interaction.response.send_message("Select a missing player to register:", view=view, ephemeral=True)
         except Exception as e:
             logger.error(f"Error opening Register Missing flow: {e}")
             if not interaction.response.is_done():
