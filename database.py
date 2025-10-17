@@ -245,23 +245,27 @@ async def insert_player_data(players_data: List[Dict[str, Any]], submitted_by: s
     # Get next mission id from a Counters collection
     counters = _db['Counters']
     try:
-        # Seed counter so the first assigned value is 7,100,719
+        # 1) Ensure document exists with baseline seq (7100718). No conflicts.
+        await counters.update_one(
+            {"_id": "mission_id"},
+            {"$setOnInsert": {"seq": 7100718}},
+            upsert=True,
+        )
+        # 2) Atomically increment by 1 and return the value
         counter_doc = await counters.find_one_and_update(
             {"_id": "mission_id"},
-            {"$setOnInsert": {"seq": 7100718}, "$inc": {"seq": 1}},
-            upsert=True,
+            {"$inc": {"seq": 1}},
             return_document=ReturnDocument.AFTER,
         )
-        mission_id = int(counter_doc.get("seq", 7100719))
-        # Enforce minimum starting value if an older counter exists
+        mission_id = int(counter_doc.get("seq", 7100719)) if counter_doc else 7100719
+        # 3) Enforce minimum starting value if a legacy lower value exists
         if mission_id < 7100719:
             counter_doc = await counters.find_one_and_update(
                 {"_id": "mission_id"},
-                {"$set": {"seq": 7100719}},
-                upsert=True,
+                {"$max": {"seq": 7100719}},
                 return_document=ReturnDocument.AFTER,
             )
-            mission_id = int(counter_doc.get("seq", 7100719))
+            mission_id = int(counter_doc.get("seq", 7100719)) if counter_doc else 7100719
     except Exception as e:
         logger.error(f"Failed to increment mission counter: {e}")
         mission_id = int(datetime.utcnow().timestamp())  # fallback unique-ish id

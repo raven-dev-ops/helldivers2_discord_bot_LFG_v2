@@ -91,13 +91,31 @@ class LeaderboardCog(commands.Cog):
                     continue
                 # Clean up old leaderboard messages (ensure deletion before posting new)
                 try:
+                    # 1) Prefer precise deletion using stored message IDs
+                    total_deleted = 0
+                    try:
+                        if hasattr(self.bot, 'mongo_db'):
+                            server_listing = self.bot.mongo_db['Server_Listing']
+                            doc = await server_listing.find_one({"discord_server_id": guild.id}, {"leaderboard_message_ids": 1})
+                            msg_ids = (doc or {}).get("leaderboard_message_ids", []) or []
+                            for mid in msg_ids:
+                                try:
+                                    msg = await channel.fetch_message(int(mid))
+                                    await msg.delete()
+                                    total_deleted += 1
+                                    await asyncio.sleep(0.2)
+                                except Exception:
+                                    pass
+                    except Exception as e:
+                        logger.warning(f"Failed precise delete by stored IDs in {guild.name}: {e}")
+
+                    # 2) Heuristic deletion fallback (by title text)
                     def _is_old_lb(m: discord.Message) -> bool:
                         if m.author != self.bot.user or not m.embeds:
                             return False
                         t = (m.embeds[0].title or "").upper()
                         return ("LEADERBOARD" in t or "MOST SHOTS FIRED" in t or "MONTHLY" in t)
 
-                    total_deleted = 0
                     perms = channel.permissions_for(guild.me)
                     if perms.manage_messages:
                         try:
@@ -127,6 +145,7 @@ class LeaderboardCog(commands.Cog):
                     logger.warning(f"Failed to purge old leaderboard messages in {guild.name}: {e}")
                 # Post leaderboard
                 new_ids = []
+                first_msg_id = None
                 if not embeds:
                     embed = discord.Embed(
                         title=title,
@@ -135,10 +154,13 @@ class LeaderboardCog(commands.Cog):
                     )
                     msg = await channel.send(embed=embed)
                     new_ids.append(int(msg.id))
+                    first_msg_id = int(msg.id)
                 else:
                     for embed in embeds:
                         msg = await channel.send(embed=embed)
                         new_ids.append(int(msg.id))
+                        if first_msg_id is None:
+                            first_msg_id = int(msg.id)
                         await asyncio.sleep(1.1)
 
                 # Persist the new message IDs for precise deletion next update
@@ -147,11 +169,13 @@ class LeaderboardCog(commands.Cog):
                         server_listing = self.bot.mongo_db['Server_Listing']
                         await server_listing.update_one(
                             {"discord_server_id": guild.id},
-                            {"": {"leaderboard_message_ids": new_ids}},
+                            {"$set": {"leaderboard_message_ids": new_ids}},
                             upsert=True,
                         )
                 except Exception as e:
                     logger.warning(f"Failed to store leaderboard_message_ids for {guild.name}: {e}")
+
+                # Pinning not required per request; no action here.
 
     async def promote_class_a_citizens(self, leaderboard_data):
         """Assign Class A Citizen role to players with >=3 games."""
@@ -277,6 +301,32 @@ class LeaderboardCog(commands.Cog):
                     if server_id_str in server_map:
                         players[name]["Clan"] = server_map[server_id_str]
 
+            # Build a lookup of ship names from Alliance for (player_name, discord_server_id)
+            ship_lookup = {}
+            try:
+                names = []
+                servers_set = set()
+                for pname, d in players.items():
+                    names.append(pname)
+                    if d.get("discord_server_id") is not None:
+                        servers_set.add(int(d["discord_server_id"]))
+                if names and servers_set:
+                    cursor = alliance_collection.find(
+                        {"player_name": {"$in": list(set(names))}, "discord_server_id": {"$in": list(servers_set)}},
+                        {"player_name": 1, "discord_server_id": 1, "ship_name": 1}
+                    )
+                    docs = await cursor.to_list(None)
+                    for doc in docs:
+                        ship = doc.get("ship_name")
+                        if ship:
+                            try:
+                                key = (doc.get("player_name"), int(doc.get("discord_server_id")))
+                                ship_lookup[key] = ship
+                            except Exception:
+                                pass
+            except Exception as e:
+                logger.warning(f"Failed to build ship name lookup for leaderboard: {e}")
+
             leaderboard = []
             for name, d in players.items():
                 average_kills = d["kills"] / d["games_played"] if d["games_played"] else 0.0
@@ -298,6 +348,7 @@ class LeaderboardCog(commands.Cog):
                     "least_deaths": -d["deaths"],  # negative for sorting
                     "discord_id": d.get("discord_id"),
                     "discord_server_id": d.get("discord_server_id"),
+                    "ship_name": ship_lookup.get((name, d.get("discord_server_id")))
                 })
 
             if stat_key == "least_deaths":
@@ -328,7 +379,11 @@ class LeaderboardCog(commands.Cog):
             for idx, p in enumerate(batch, start=i*batch_size + 1):
                 name = (p['player_name'][:42] + "…") if len(p['player_name']) > 43 else p['player_name']
 
-                value_lines = [
+                value_lines = []
+                ship = p.get('ship_name')
+                if ship:
+                    value_lines.append(f"**SES:** {ship}")
+                value_lines.extend([
                     f"**Kills:** {p['kills']}",
                     f"**Accuracy:** {(p['shots_hit'] / p['shots_fired'] * 100 if p['shots_fired'] else 0.0):.1f}%",
                     f"**Shots Fired:** {p['shots_fired']}",
@@ -336,9 +391,8 @@ class LeaderboardCog(commands.Cog):
                     f"**Deaths:** {p['deaths']}",
                     f"**Melee Kills:** {p['melee_kills']}",
                     f"**Stims Used:** {p['stims_used']}",
-                    f"**SES:** {p['samples_extracted']}",
-                    f"**Stratagems Used:** {p['stratagems_used']}",
-                ]
+                ])
+                value_lines.append(f"**Strats Used:** {p['stratagems_used']}")
 
                 embed.add_field(
                     name=f"#{idx}. {name}",

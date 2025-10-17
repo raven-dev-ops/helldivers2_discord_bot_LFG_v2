@@ -25,7 +25,10 @@ KNOWN_RESOLUTIONS = {
             "Shots Fired": (229, 291, 293, 311),
             "Shots Hit":   (229, 322, 293, 346),
             "Deaths":      (250, 352, 293, 376),
-            "Stims Used":  (250, 426, 293, 452),`r`n            "Samples Extracted":  (250, 496, 293, 522),`r`n            "Stratagems Used": (250, 533, 293, 559),`r`n            "Melee Kills": (250, 570, 293, 596),
+            "Stims Used":  (250, 426, 293, 452),
+            "Samples Extracted":  (250, 496, 293, 522),
+            "Stratagems Used": (250, 533, 293, 559),
+            "Melee Kills": (250, 570, 293, 596),
         },
         # For subsequent players, we shift horizontally by 305
         'offset': 305,

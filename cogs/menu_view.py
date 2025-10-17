@@ -8,7 +8,7 @@ import asyncio
 from PIL import Image
 from io import BytesIO
 from .extract_helpers import validate_stat
-from database import get_mission_docs, update_mission_player_fields
+from database import get_mission_docs, update_mission_player_fields, get_server_listing_by_id
 
 # Map each clan name to the ID of the guild where we store the invite link
 CLAN_SERVER_IDS = {
@@ -219,6 +219,11 @@ class FieldSelect(discord.ui.Select):
         await interaction.response.edit_message(content=f"Enter new value for {self.values[0]} (Player {self.parent.selected_player}) in chat…")
         def check(m: discord.Message):
             return m.author == interaction.user and m.channel == interaction.channel
+        # Remove dropdowns/components from the ephemeral message after selection
+        try:
+            await interaction.edit_original_response(view=None)
+        except Exception:
+            pass
         try:
             msg = await self.parent.bot.wait_for('message', check=check, timeout=60.0)
             try:
@@ -226,6 +231,14 @@ class FieldSelect(discord.ui.Select):
             except Exception:
                 pass
             field = self.values[0]
+            # Capture old value from provided docs
+            old_value = None
+            try:
+                prev_doc = next((d for d in self.parent.docs if d.get("player_name") == self.parent.selected_player), None)
+                if prev_doc is not None:
+                    old_value = prev_doc.get(field)
+            except Exception:
+                prev_doc = None
             try:
                 new_value = validate_stat(field, msg.content.strip())
             except Exception:
@@ -236,6 +249,34 @@ class FieldSelect(discord.ui.Select):
             ok = await update_mission_player_fields(self.parent.mission_id, self.parent.selected_player, updates)
             if ok:
                 await interaction.followup.send(f"Updated Mission #{self.parent.mission_id:07d} • {self.parent.selected_player} • {field} = {new_value}", ephemeral=True)
+                # Post an audit entry to the stat-reports channel and update local snapshot
+                try:
+                    server_data = await get_server_listing_by_id(interaction.guild_id)
+                    monitor_channel_id = server_data.get("monitor_channel_id") if server_data else None
+                    channel = interaction.guild.get_channel(monitor_channel_id) if monitor_channel_id else None
+                    if channel is None:
+                        channel = next((c for c in interaction.guild.text_channels if c.name in {"❗｜stat-reports", "stat-reports"}), None)
+                    if channel is not None:
+                        embed = discord.Embed(title="Mission Edit", color=discord.Color.orange())
+                        embed.description = f"Mission #{self.parent.mission_id:07d}"
+                        embed.add_field(name="Player", value=self.parent.selected_player, inline=True)
+                        embed.add_field(name="Field", value=field, inline=True)
+                        if old_value is not None:
+                            embed.add_field(name="From", value=str(old_value), inline=True)
+                        embed.add_field(name="To", value=str(new_value), inline=True)
+                        embed.set_footer(text=f"Edited by {interaction.user} ({interaction.user.id})")
+                        await channel.send(embed=embed)
+                except Exception as e:
+                    logging.warning(f"Failed to post edit audit to stat-reports: {e}")
+                try:
+                    if prev_doc is not None:
+                        prev_doc[field] = new_value
+                except Exception:
+                    pass
+                try:
+                    await interaction.edit_original_response(view=None)
+                except Exception:
+                    pass
             else:
                 await interaction.followup.send("Update failed; mission/player not found.", ephemeral=True)
         except asyncio.TimeoutError:

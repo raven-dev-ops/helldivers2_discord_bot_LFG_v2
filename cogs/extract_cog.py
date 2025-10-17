@@ -399,8 +399,22 @@ class ExtractCog(commands.Cog):
                 if p.get('player_name') and str(p.get('player_name')).strip() not in ["", "0", ".", "a"]
             ]
             logger.info(f"After initial filtering, {len(players_data)} player entries remain.")
-            if len(players_data) < 2:
-                await interaction.followup.send("At least 2 players with valid names must be present in the image.", ephemeral=True)
+            if len(players_data) < 1:
+                # Provide a debug overlay with OCR regions to help adjust
+                try:
+                    img_bgr = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
+                    annotated = draw_boundaries(img_bgr.copy(), regions)
+                    ok, buf = cv2.imencode('.png', annotated)
+                    if ok:
+                        await interaction.followup.send(
+                            content="No players with valid names were detected. Showing OCR regions overlay for debugging.",
+                            file=discord.File(BytesIO(bytearray(buf)), filename=f"ocr_regions_{image.filename.rsplit('.',1)[0]}.png"),
+                            ephemeral=True
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to annotate OCR regions for debug (no-name stage): {e}
+")
+                await interaction.followup.send("No players with valid names were detected in the image.", ephemeral=True)
                 return
             registered_users = await get_registered_users()
             logger.info(f"Loaded {len(registered_users)} registered users for matching.")
@@ -440,10 +454,23 @@ class ExtractCog(commands.Cog):
                     player['clan_name'] = "N/A"
             players_data = [p for p in players_data if p.get('player_name')]
             logger.info(f"After matching against DB, {len(players_data)} registered players remain.")
-            if len(players_data) < 2:
+            # Relaxed rule: accept as long as at least one registered player is present
+            if len(players_data) < 1:
+                # Provide a debug overlay with OCR regions to help adjust
+                try:
+                    img_bgr = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
+                    annotated = draw_boundaries(img_bgr.copy(), regions)
+                    ok, buf = cv2.imencode('.png', annotated)
+                    if ok:
+                        await interaction.followup.send(
+                            content="No registered players were detected. Showing OCR regions overlay for debugging.",
+                            file=discord.File(BytesIO(bytearray(buf)), filename=f"ocr_regions_{image.filename.rsplit('.',1)[0]}.png"),
+                            ephemeral=True
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to annotate OCR regions for debug (registration stage): {e}")
                 await interaction.followup.send(
-                    "At least 2 registered players must be detected in the image. "
-                    "All reported players must be registered in the database.",
+                    "No registered players were detected in the image. Please ensure at least one player is registered.",
                     ephemeral=True
                 )
                 return
