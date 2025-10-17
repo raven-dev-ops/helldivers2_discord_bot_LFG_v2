@@ -242,13 +242,12 @@ def process_for_ocr(image, regions, NUM_PLAYERS=None):
 
         formatted_player["Accuracy"] = f"{accuracy:.1f}%"
 
-        # Only append if the player_name is real (not blank, "0", ".", or "a")
-        name_check = formatted_player.get("player_name", "").strip().lower()
-        if name_check not in ["", "0", ".", "a"]:
-            player_data.append(formatted_player)
-            logger.debug(f"OCR extracted for player {player_index + 1}: {formatted_player}")
-        else:
-            logger.debug(f"Ignoring blank/junk player column for P{player_index + 1}")
+        # Append even if name is blank so the user can manually register later
+        name_check = (formatted_player.get("player_name") or "").strip().lower()
+        if name_check in ["0", ".", "a"]:
+            formatted_player["player_name"] = None
+        player_data.append(formatted_player)
+        logger.debug(f"OCR extracted (including blanks) for player {player_index + 1}: {formatted_player}")
 
     return player_data
 

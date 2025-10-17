@@ -732,7 +732,14 @@ class ExtractCog(commands.Cog):
                     player['discord_id'] = None
                     player['discord_server_id'] = None
                     player['clan_name'] = "N/A"
-            missing_players = [p.copy() for p in players_data if not p.get('player_name') and p.get('unregistered_name')]
+            # Treat any player without a resolved player_name as missing, even if no OCR name was read
+            missing_players = []
+            for p in players_data:
+                if not p.get('player_name'):
+                    mp = p.copy()
+                    if not mp.get('unregistered_name'):
+                        mp['unregistered_name'] = mp.get('player_name') or 'Unknown'
+                    missing_players.append(mp)
             players_data = [p for p in players_data if p.get('player_name')]
             logger.info(f"After matching against DB, {len(players_data)} registered players remain.")
             # Relaxed rule: accept as long as at least one registered player is present
