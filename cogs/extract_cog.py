@@ -28,6 +28,7 @@ from config import (
     ALLOWED_EXTENSIONS,
     MATCH_SCORE_THRESHOLD,
     class_a_role_id,
+    class_b_role_id,
 )
 from ocr_processing import process_for_ocr, clean_ocr_result
 from boundary_drawing import define_regions, draw_boundaries
@@ -597,21 +598,22 @@ class ExtractCog(commands.Cog):
             )
             return
 
-        if class_a_role_id is None:
-            logger.error("class_a_role_id is not configured.")
+        # Submission is allowed for Class B Citizens
+        if class_b_role_id is None:
+            logger.error("class_b_role_id is not configured.")
             await interaction.response.send_message(
-                "Class A Citizen role is not configured. Contact an admin.",
+                "Class B Citizen role is not configured. Contact an admin.",
                 ephemeral=True
             )
             return
 
         role_ids = [r.id for r in getattr(interaction.user, "roles", [])]
-        if class_a_role_id not in role_ids:
+        if class_b_role_id not in role_ids:
             logger.warning(
-                f"User {interaction.user} (ID: {interaction.user.id}) missing Class A Citizen role ({class_a_role_id})."
+                f"User {interaction.user} (ID: {interaction.user.id}) missing Class B Citizen role ({class_b_role_id})."
             )
             await interaction.response.send_message(
-                "You must be a Class A Citizen to submit stats.",
+                "You must be a Class B Citizen to submit stats.",
                 ephemeral=True
             )
             return
