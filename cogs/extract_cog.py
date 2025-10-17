@@ -211,6 +211,8 @@ class ConfirmationView(discord.ui.View):
             if not interaction.response.is_done():
                 await interaction.response.send_message("Unable to open registration flow.", ephemeral=True)
 
+    
+
 class RegisterMissingView(discord.ui.View):
     def __init__(self, shared_data: SharedData, bot: commands.Bot, guild_id: int):
         super().__init__(timeout=120)
