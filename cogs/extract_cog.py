@@ -680,28 +680,11 @@ class ExtractCog(commands.Cog):
             )
 
             players_data = await asyncio.to_thread(process_for_ocr, img_cv, regions)
-            logger.info(f"OCR produced {len(players_data)} player entries before cleanup.")
-            players_data = [
-                p for p in players_data
-                if p.get('player_name') and str(p.get('player_name')).strip() not in ["", "0", ".", "a"]
-            ]
-            logger.info(f"After initial filtering, {len(players_data)} player entries remain.")
-            if len(players_data) < 1:
-                # Provide a debug overlay with OCR regions to help adjust
-                try:
-                    img_bgr = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
-                    annotated = draw_boundaries(img_bgr.copy(), regions)
-                    ok, buf = cv2.imencode('.png', annotated)
-                    if ok:
-                        await interaction.followup.send(
-                            content="No players with valid names were detected. Showing OCR regions overlay for debugging.",
-                            file=discord.File(BytesIO(bytearray(buf)), filename=f"ocr_regions_{image.filename.rsplit('.',1)[0]}.png"),
-                            ephemeral=True
-                        )
-                except Exception as e:
-                    logger.warning(f"Failed to annotate OCR regions for debug (no-name stage): {e}")
-                await interaction.followup.send("No players with valid names were detected in the image.", ephemeral=True)
-                return
+            # Keep all player columns (even if name OCR failed) so we can register
+            # missing players later while preserving their stats.
+            logger.info(
+                f"OCR produced {len(players_data)} player entries (including blanks). Proceeding to matching."
+            )
             registered_users = await get_registered_users()
             logger.info(f"Loaded {len(registered_users)} registered users for matching.")
             for player in players_data:
