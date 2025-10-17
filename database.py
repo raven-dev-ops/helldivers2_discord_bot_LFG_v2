@@ -251,6 +251,57 @@ def find_best_match(
 # STATS INSERTION
 ################################################
 
+async def _get_next_mission_id() -> int:
+    """
+    Returns the next sequential mission_id, seeded to start at 7100719.
+    Robust against transient update conflicts; falls back to max()+1 if needed.
+    """
+    await get_mongo_client()
+    counters = _db['Counters']
+    seed_value = 7100718  # so the first increment becomes 7100719
+
+    # Up to 3 attempts for a clean atomic increment
+    for attempt in range(3):
+        try:
+            # Ensure seed doc exists (no conflict with $inc)
+            await counters.update_one({"_id": "mission_id"}, {"$setOnInsert": {"seq": seed_value}}, upsert=True)
+            # Atomically increment and return new value
+            counter_doc = await counters.find_one_and_update(
+                {"_id": "mission_id"},
+                {"$inc": {"seq": 1}},
+                return_document=ReturnDocument.AFTER,
+            )
+            mission_id = int(counter_doc.get("seq", seed_value + 1)) if counter_doc else seed_value + 1
+            # Enforce minimum starting value
+            if mission_id < (seed_value + 1):
+                counter_doc = await counters.find_one_and_update(
+                    {"_id": "mission_id"},
+                    {"$max": {"seq": seed_value + 1}},
+                    return_document=ReturnDocument.AFTER,
+                )
+                mission_id = int(counter_doc.get("seq", seed_value + 1)) if counter_doc else seed_value + 1
+            return mission_id
+        except Exception as e:
+            logger.warning(f"Attempt {attempt+1}/3 to increment mission counter failed: {e}")
+
+    # Fallback: derive from existing stats (last mission_id) + 1
+    try:
+        doc = await stats_collection.find({}, {"mission_id": 1}).sort("mission_id", -1).limit(1).to_list(length=1)
+        last = int(doc[0]["mission_id"]) if doc else seed_value
+        mission_id = max(last, seed_value) + 1
+        # Try to push counter up to the derived mission_id to keep things in sync
+        try:
+            await counters.update_one({"_id": "mission_id"}, {"$max": {"seq": mission_id}}, upsert=True)
+        except Exception:
+            pass
+        logger.info(f"Derived next mission_id={mission_id} from stats fallback.")
+        return mission_id
+    except Exception as e:
+        logger.error(f"Failed to derive mission id from stats fallback: {e}")
+        # As an absolute last resort, return the seed+1 to keep sequence valid
+        return seed_value + 1
+
+
 async def insert_player_data(players_data: List[Dict[str, Any]], submitted_by: str):
     """
     Insert each player's stats data into the stats_collection.
@@ -258,33 +309,8 @@ async def insert_player_data(players_data: List[Dict[str, Any]], submitted_by: s
     Returns the mission_id used.
     """
     await get_mongo_client()
-    # Get next mission id from a Counters collection
-    counters = _db['Counters']
-    try:
-        # 1) Ensure document exists with baseline seq (7100718). No conflicts.
-        await counters.update_one(
-            {"_id": "mission_id"},
-            {"$setOnInsert": {"seq": 7100718}},
-            upsert=True,
-        )
-        # 2) Atomically increment by 1 and return the value
-        counter_doc = await counters.find_one_and_update(
-            {"_id": "mission_id"},
-            {"$inc": {"seq": 1}},
-            return_document=ReturnDocument.AFTER,
-        )
-        mission_id = int(counter_doc.get("seq", 7100719)) if counter_doc else 7100719
-        # 3) Enforce minimum starting value if a legacy lower value exists
-        if mission_id < 7100719:
-            counter_doc = await counters.find_one_and_update(
-                {"_id": "mission_id"},
-                {"$max": {"seq": 7100719}},
-                return_document=ReturnDocument.AFTER,
-            )
-            mission_id = int(counter_doc.get("seq", 7100719)) if counter_doc else 7100719
-    except Exception as e:
-        logger.error(f"Failed to increment mission counter: {e}")
-        mission_id = int(datetime.utcnow().timestamp())  # fallback unique-ish id
+    # Get next sequential mission id (robust)
+    mission_id = await _get_next_mission_id()
 
     for player in players_data:
         doc = {
