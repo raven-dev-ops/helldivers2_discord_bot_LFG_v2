@@ -306,6 +306,7 @@ class LeaderboardCog(commands.Cog):
             db = self.bot.mongo_db if hasattr(self.bot, 'mongo_db') else AsyncIOMotorClient(mongo_uri)['GPTHellbot']
             stats_collection = db['User_Stats']
             alliance_collection = db['Alliance']
+            server_listing_collection = db['Server_Listing']
 
             # Date range for month
             start_of_month = datetime(year, month, 1)
@@ -322,26 +323,114 @@ class LeaderboardCog(commands.Cog):
                     except Exception:
                         return default
 
-            # Aggregate by Discord ID instead of player_name
+            # Prepare lookups to resolve/repair discord_id by player_name where possible
+            all_stats = await stats_collection.find(query).to_list(None)
+            if not all_stats:
+                return []
+
+            # Collect names and candidate discord IDs from stats
+            name_set = set()
+            stats_did_ints = set()
+            for doc in all_stats:
+                n = doc.get('player_name')
+                if isinstance(n, str) and n.strip():
+                    name_set.add(n.strip())
+                did = doc.get('discord_id')
+                try:
+                    if did not in (None, ""):
+                        stats_did_ints.add(int(did))
+                except Exception:
+                    pass
+
+            # Fetch Alliance profiles by discord_id (valid id set)
+            profiles_by_did: dict[str, list[dict]] = {}
+            valid_dids: set[str] = set()
+            if stats_did_ints:
+                cur = alliance_collection.find(
+                    {"discord_id": {"$in": list(stats_did_ints)}},
+                    {"discord_id": 1, "player_name": 1, "discord_server_id": 1, "ship_name": 1, "server_name": 1}
+                )
+                for d in await cur.to_list(None):
+                    try:
+                        k = str(int(d.get("discord_id")))
+                        profiles_by_did.setdefault(k, []).append(d)
+                        valid_dids.add(k)
+                    except Exception:
+                        pass
+
+            # Fetch Alliance profiles by player_name to repair missing/invalid ids
+            profiles_by_name: dict[str, list[dict]] = {}
+            if name_set:
+                cur2 = alliance_collection.find(
+                    {"player_name": {"$in": list(name_set)}},
+                    {"discord_id": 1, "player_name": 1, "discord_server_id": 1, "ship_name": 1, "server_name": 1}
+                )
+                for d in await cur2.to_list(None):
+                    nm = d.get("player_name")
+                    if isinstance(nm, str) and nm.strip():
+                        profiles_by_name.setdefault(nm.strip(), []).append(d)
+
+            # Server name map for clan display when no Alliance profile is found
+            server_name_map = {}
+            try:
+                sdocs = await server_listing_collection.find({}, {"discord_server_id": 1, "discord_server_name": 1}).to_list(None)
+                for sd in sdocs:
+                    try:
+                        server_name_map[int(sd.get("discord_server_id"))] = sd.get("discord_server_name") or "Unknown Clan"
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            # Aggregate by effective Discord ID (repaired from name when possible)
             players = defaultdict(lambda: {
                 "melee_kills": 0, "kills": 0, "deaths": 0,
                 "shots_fired": 0, "shots_hit": 0,
                 "stims_used": 0, "samples_extracted": 0, "stratagems_used": 0,
                 "games_played": 0,
                 "server_counts": defaultdict(int),  # guild id -> games
+                "name_counts": defaultdict(int),    # observed names for this key
             })
 
-            all_stats = await stats_collection.find(query).to_list(None)
+            def resolve_effective_did(doc: dict) -> str | None:
+                # If stats discord_id is present and exists in Alliance, use it
+                did = doc.get('discord_id')
+                try:
+                    if did not in (None, ""):
+                        s = str(int(did))
+                        if s in valid_dids:
+                            return s
+                except Exception:
+                    pass
+                # Else try to map by exact player_name, prefer same server match
+                nm = doc.get('player_name')
+                cand = profiles_by_name.get(nm) if isinstance(nm, str) else None
+                if cand:
+                    if len(cand) == 1:
+                        try:
+                            return str(int(cand[0].get("discord_id")))
+                        except Exception:
+                            return None
+                    srv = doc.get('discord_server_id')
+                    for c in cand:
+                        try:
+                            if srv is not None and int(c.get("discord_server_id")) == int(srv):
+                                return str(int(c.get("discord_id")))
+                        except Exception:
+                            continue
+                    # fallback to first candidate
+                    try:
+                        return str(int(cand[0].get("discord_id")))
+                    except Exception:
+                        return None
+                return None
 
             for doc in all_stats:
-                did = doc.get('discord_id')
-                if did in (None, ""):
-                    # Skip rows that are not linked to a Discord account
-                    continue
-                try:
-                    did_key = str(did)
-                except Exception:
-                    continue
+                did_key = resolve_effective_did(doc)
+                if not did_key:
+                    # Still keep track of name-only entries under a pseudo key
+                    nm = doc.get('player_name') or "Unknown"
+                    did_key = f"name::{str(nm).strip()}"
 
                 players[did_key]["melee_kills"]       += to_int(doc.get('Melee Kills'))
                 players[did_key]["kills"]             += to_int(doc.get('Kills'))
@@ -352,6 +441,11 @@ class LeaderboardCog(commands.Cog):
                 players[did_key]["samples_extracted"] += to_int(doc.get('Samples Extracted'))
                 players[did_key]["stratagems_used"]   += to_int(doc.get('Stratagems Used'))
                 players[did_key]["games_played"]      += 1
+
+                # Track observed names for later fallback naming
+                nm = doc.get('player_name')
+                if isinstance(nm, str) and nm.strip():
+                    players[did_key]["name_counts"][nm.strip()] += 1
 
                 server_id = doc.get('discord_server_id')
                 if server_id is not None:
@@ -374,26 +468,8 @@ class LeaderboardCog(commands.Cog):
                 else:
                     primary_server_for[did_key] = None
 
-            # Fetch registration profiles for names/ship by discord_id
-            did_ints = []
-            for did_key in players.keys():
-                try:
-                    did_ints.append(int(did_key))
-                except Exception:
-                    pass
-            profiles = {}
-            if did_ints:
-                cursor = alliance_collection.find(
-                    {"discord_id": {"$in": did_ints}},
-                    {"discord_id": 1, "player_name": 1, "discord_server_id": 1, "ship_name": 1, "server_name": 1}
-                )
-                prof_docs = await cursor.to_list(None)
-                for d in prof_docs:
-                    try:
-                        k = str(d.get("discord_id"))
-                        profiles.setdefault(k, []).append(d)
-                    except Exception:
-                        pass
+            # Profiles were already fetched into profiles_by_did; reuse
+            profiles = profiles_by_did
 
             def choose_profile(did_key: str):
                 choices = profiles.get(did_key) or []
@@ -413,8 +489,17 @@ class LeaderboardCog(commands.Cog):
             for did_key, agg in players.items():
                 average_kills = (agg["kills"] / agg["games_played"]) if agg["games_played"] else 0.0
                 average_accuracy = (agg["shots_hit"] / agg["shots_fired"] * 100) if agg["shots_fired"] > 0 else 0.0
-                prof = choose_profile(did_key)
-                player_name = (prof.get("player_name") if prof else None) or f"User {did_key}"
+                is_name_key = did_key.startswith("name::")
+                prof = None if is_name_key else choose_profile(did_key)
+                if prof is not None:
+                    player_name = prof.get("player_name") or f"User {did_key}"
+                else:
+                    # Fallback to the most common observed name for this key
+                    name_counts = players[did_key]["name_counts"]
+                    if name_counts:
+                        player_name = sorted(name_counts.items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
+                    else:
+                        player_name = did_key.replace("name::", "User ")
                 ship_name = (prof.get("ship_name") if prof else None)
                 discord_server_id = None
                 try:
@@ -433,11 +518,11 @@ class LeaderboardCog(commands.Cog):
                     "samples_extracted": agg["samples_extracted"],
                     "stratagems_used": agg["stratagems_used"],
                     "games_played": agg["games_played"],
-                    "Clan": prof.get("server_name") if prof and prof.get("server_name") else "Unknown Clan",
+                    "Clan": (prof.get("server_name") if prof and prof.get("server_name") else (server_name_map.get(discord_server_id) if discord_server_id in server_name_map else "Unknown Clan")),
                     "average_kills": average_kills,
                     "average_accuracy": average_accuracy,
                     "least_deaths": -agg["deaths"],  # negative for sorting
-                    "discord_id": did_key,
+                    "discord_id": None if is_name_key else did_key,
                     "discord_server_id": discord_server_id,
                     "ship_name": ship_name,
                 })
