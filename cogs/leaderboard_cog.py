@@ -608,7 +608,7 @@ class LeaderboardCog(commands.Cog):
                     last = datetime(now.year + 1, 1, 1, tzinfo=tz) - timedelta(days=1)
                 else:
                     last = datetime(now.year, now.month + 1, 1, tzinfo=tz) - timedelta(days=1)
-                promo_str = last.strftime("Promotions awarded on %B %d, %Y")
+                promo_str = last.strftime("Awarded on %B %d, %Y")
                 embed.add_field(name="Promotion Date", value=promo_str, inline=False)
             except Exception:
                 pass
