@@ -205,13 +205,19 @@ class GuildManagementCog(commands.Cog):
             else:
                 logging.debug(f"Skipping non-text channel '{channel.name}' (ID: {channel.id}) in category '{category.name}'.")
 
-        # Channels inherit from category; enforce Class B visibility at channel level too
+        # Channels inherit from category; enforce Class B visibility and readonly behavior
         gpt_channel_overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             bot_member: discord.PermissionOverwrite(view_channel=True, send_messages=True, add_reactions=True, read_message_history=True)
         }
         if class_b is not None:
-            gpt_channel_overwrites[class_b] = discord.PermissionOverwrite(view_channel=True, read_message_history=True)
+            # Class B can view and read history, but cannot send or react
+            gpt_channel_overwrites[class_b] = discord.PermissionOverwrite(
+                view_channel=True,
+                read_message_history=True,
+                send_messages=False,
+                add_reactions=False,
+            )
         gpt_channel = await self._find_and_clean_specific_channel(
             guild,
             category,
@@ -255,7 +261,13 @@ class GuildManagementCog(commands.Cog):
             bot_member: discord.PermissionOverwrite(view_channel=True, send_messages=True, add_reactions=True, read_message_history=True)
         }
         if class_b is not None:
-            monitor_overwrites[class_b] = discord.PermissionOverwrite(view_channel=True, read_message_history=True)
+            # Class B can view and read history, but cannot send or react
+            monitor_overwrites[class_b] = discord.PermissionOverwrite(
+                view_channel=True,
+                read_message_history=True,
+                send_messages=False,
+                add_reactions=False,
+            )
 
         monitor_channel = await self._find_and_clean_specific_channel(
             guild,
@@ -268,8 +280,17 @@ class GuildManagementCog(commands.Cog):
             logging.warning(f"Failed to setup '#{monitor_channel_name}' channel in guild '{guild.name}'.")
 
         leaderboard_overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
             bot_member: discord.PermissionOverwrite(view_channel=True, send_messages=True, add_reactions=True, read_message_history=True)
         }
+        if class_b is not None:
+            # Class B can view and read history, but cannot send or react
+            leaderboard_overwrites[class_b] = discord.PermissionOverwrite(
+                view_channel=True,
+                read_message_history=True,
+                send_messages=False,
+                add_reactions=False,
+            )
 
         leaderboard_channel = await self._find_and_clean_specific_channel(
             guild,

@@ -252,10 +252,15 @@ class LeaderboardCog(commands.Cog):
         if channel is None:
             channel = next((c for c in guild.text_channels if c.name in ALTERNATE_LEADERBOARD_NAMES), None)
 
-        # Build overwrites: only Class B can view; bot can post/manage
+        # Build overwrites: only Class B can view; Class B cannot send or react; bot can post/manage
         overwrites = {guild.default_role: discord.PermissionOverwrite(view_channel=False)}
         if class_b:
-            overwrites[class_b] = discord.PermissionOverwrite(view_channel=True, read_message_history=True)
+            overwrites[class_b] = discord.PermissionOverwrite(
+                view_channel=True,
+                read_message_history=True,
+                send_messages=False,
+                add_reactions=False,
+            )
         overwrites[guild.me] = discord.PermissionOverwrite(
             view_channel=True, send_messages=True, embed_links=True, attach_files=True, manage_messages=True
         )
@@ -283,11 +288,17 @@ class LeaderboardCog(commands.Cog):
                     changed = True
                 except Exception:
                     pass
-            # Ensure visibility and bot perms
+            # Ensure visibility and readonly for Class B, and bot perms
             try:
                 await channel.set_permissions(guild.default_role, view_channel=False)
                 if class_b:
-                    await channel.set_permissions(class_b, view_channel=True, read_message_history=True)
+                    await channel.set_permissions(
+                        class_b,
+                        view_channel=True,
+                        read_message_history=True,
+                        send_messages=False,
+                        add_reactions=False,
+                    )
                 await channel.set_permissions(guild.me, view_channel=True, send_messages=True, embed_links=True, attach_files=True, manage_messages=True)
                 if category and channel.category != category and guild.me.guild_permissions.manage_channels:
                     await channel.edit(category=category)
