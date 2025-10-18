@@ -116,7 +116,12 @@ class ConfirmationView(discord.ui.View):
                 p['Shots Hit'] = sh
                 p['Accuracy'] = f"{min(acc, 100.0):.1f}%"
 
-            mission_id = await insert_player_data(self.shared_data.players_data, self.shared_data.submitter_player_name)
+            mission_id = await insert_player_data(
+                self.shared_data.players_data,
+                self.shared_data.submitter_player_name,
+                submitter_discord_id=int(interaction.user.id),
+                submitter_server_id=int(interaction.guild_id) if interaction.guild_id else None,
+            )
             for player in self.shared_data.players_data:
                 await maybe_promote(self.bot, player)
             leaderboard_cog = self.bot.get_cog("LeaderboardCog")

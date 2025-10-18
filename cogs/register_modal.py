@@ -3,7 +3,7 @@ from discord.ext import commands
 from datetime import datetime
 import logging
 import asyncio
-from config import lfg_ping_role_id
+from config import lfg_ping_role_id, na_role_id, eu_role_id, uk_role_id, au_role_id, asia_role_id
 
 class RegisterModal(discord.ui.Modal, title="Register"):
     """
@@ -20,6 +20,12 @@ class RegisterModal(discord.ui.Modal, title="Register"):
         placeholder="Enter your Super Earth Ship Name...",
         required=False,
         max_length=100
+    )
+    region = discord.ui.TextInput(
+        label="Region (optional)",
+        placeholder="NA, EU, UK, AU, ASIA",
+        required=False,
+        max_length=16
     )
 
     def __init__(self, bot, interaction: discord.Interaction):
@@ -88,6 +94,79 @@ class RegisterModal(discord.ui.Modal, title="Register"):
                     logging.warning("LFG PING! role not found by ID or name; skipping assignment.")
             except Exception as role_e:
                 logging.warning(f"Failed to assign LFG PING! role during registration: {role_e}")
+
+            # Attempt to assign a regional role:
+            # 1) If provided in modal (Region field), use it.
+            # 2) Else, auto-detect from locale if available.
+            try:
+                # Determine desired region
+                rid_map = {"NA": na_role_id, "EU": eu_role_id, "UK": uk_role_id, "AU": au_role_id, "ASIA": asia_role_id}
+                region_code = None
+                user_input = (self.region.value or "").strip().upper()
+                synonyms = {
+                    "NORTH AMERICA": "NA",
+                    "USA": "NA",
+                    "US": "NA",
+                    "CANADA": "NA",
+                    "MEXICO": "NA",
+                    "EUROPE": "EU",
+                    "UNITED KINGDOM": "UK",
+                    "GREAT BRITAIN": "UK",
+                    "BRITAIN": "UK",
+                    "OCEANIA": "AU",
+                    "AUSTRALIA": "AU",
+                    "NEW ZEALAND": "AU",
+                }
+                if user_input:
+                    if user_input in rid_map:
+                        region_code = user_input
+                    else:
+                        region_code = synonyms.get(user_input)
+                if not region_code:
+                    loc = getattr(interaction, 'user_locale', None) or getattr(interaction, 'locale', None)
+                    if isinstance(loc, str):
+                        lc = loc.lower()
+                        if any(k in lc for k in ("en-us", "en-ca", "es-419")):
+                            region_code = "NA"
+                        elif any(k in lc for k in ("en-gb",)):
+                            region_code = "UK"
+                        elif any(k in lc for k in ("en-au", "en-nz")):
+                            region_code = "AU"
+                        elif any(k in lc for k in ("ja", "ko", "zh", "th", "vi", "id", "ms")):
+                            region_code = "ASIA"
+                        elif any(k in lc for k in ("de", "fr", "es", "it", "pl", "nl", "pt", "sv", "da", "fi", "no", "cs", "hu", "tr", "ru")):
+                            region_code = "EU"
+
+                if region_code:
+                    target_role = None
+                    rid = rid_map.get(region_code)
+                    if rid is not None:
+                        target_role = interaction.guild.get_role(int(rid))
+                    if target_role is None:
+                        name_fallbacks = {
+                            "NA": ["NA", "North America"],
+                            "EU": ["EU", "Europe"],
+                            "UK": ["UK", "United Kingdom"],
+                            "AU": ["AU", "Australia", "Oceania"],
+                            "ASIA": ["ASIA", "Asia"],
+                        }
+                        for n in name_fallbacks.get(region_code, []):
+                            target_role = discord.utils.get(interaction.guild.roles, name=n)
+                            if target_role:
+                                break
+                    if target_role:
+                        all_region_ids = [rid for rid in rid_map.values() if rid is not None]
+                        to_remove = [r for r in interaction.user.roles if r.id in all_region_ids and r.id != target_role.id]
+                        if to_remove:
+                            try:
+                                await interaction.user.remove_roles(*to_remove, reason="Region role cleanup")
+                            except Exception:
+                                pass
+                        if all(r.id != target_role.id for r in interaction.user.roles):
+                            await interaction.user.add_roles(target_role, reason="Registration: set region role")
+                            logging.info(f"Assigned region role {target_role.name} to {interaction.user}.")
+            except Exception as re:
+                logging.warning(f"Failed to auto-assign region role from locale: {re}")
 
             msg = f"Registration successful! Welcome, **{player_name}**!"
             if ship_name:

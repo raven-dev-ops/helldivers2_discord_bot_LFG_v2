@@ -67,6 +67,21 @@ class_a_role_id = _get_int_env('CLASS_A_ROLE_ID')
 guild_id = _get_int_env('GUILD_ID')
 sos_network_id = _get_int_env('SOS_NETWORK_ID')
 lfg_ping_role_id = _get_int_env('LFG_PING_ROLE_ID')
+mvp_role_id = _get_int_env('MVP_ROLE_ID')
+
+# Regional role IDs (optional). If unset, region assignment will fall back to role names.
+na_role_id = _get_int_env('NA_ROLE_ID')
+eu_role_id = _get_int_env('EU_ROLE_ID')
+uk_role_id = _get_int_env('UK_ROLE_ID')
+au_role_id = _get_int_env('AU_ROLE_ID')
+asia_role_id = _get_int_env('ASIA_ROLE_ID')
+
+# Medal role IDs for submitter awards (optional)
+gpt_achievement_medal_role_id = _get_int_env('GPT_ACHIEVEMENT_MEDAL_ROLE_ID')
+gpt_commendation_medal_role_id = _get_int_env('GPT_COMMENDATION_MEDAL_ROLE_ID')
+gpt_bronze_star_medal_role_id = _get_int_env('GPT_BRONZE_STAR_MEDAL_ROLE_ID')
+gpt_silver_star_medal_role_id = _get_int_env('GPT_SILVER_STAR_MEDAL_ROLE_ID')
+gpt_medal_of_honor_role_id = _get_int_env('GPT_MEDAL_OF_HONOR_ROLE_ID')
 
 # Notes:
 # Some cogs (e.g., Extract) fetch server-specific IDs from the database,

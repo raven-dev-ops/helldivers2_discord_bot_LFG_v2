@@ -97,6 +97,7 @@ async def create_indexes():
         # Stats collection: index useful fields we actually query/sort on
         await _db[STATS_COLLECTION].create_index("player_name")
         await _db[STATS_COLLECTION].create_index("submitted_at")
+        await _db[STATS_COLLECTION].create_index("submitted_by_discord_id")
         await _db[STATS_COLLECTION].create_index("discord_id")
         await _db[STATS_COLLECTION].create_index("discord_server_id")
         await _db[STATS_COLLECTION].create_index("mission_id")
@@ -302,7 +303,12 @@ async def _get_next_mission_id() -> int:
         return seed_value + 1
 
 
-async def insert_player_data(players_data: List[Dict[str, Any]], submitted_by: str):
+async def insert_player_data(
+    players_data: List[Dict[str, Any]],
+    submitted_by: str,
+    submitter_discord_id: int | None = None,
+    submitter_server_id: int | None = None,
+):
     """
     Insert each player's stats data into the stats_collection.
     Assigns an auto-incrementing mission_id shared by all players in this submission.
@@ -330,6 +336,8 @@ async def insert_player_data(players_data: List[Dict[str, Any]], submitted_by: s
             "discord_server_id": player.get("discord_server_id", None),
             "clan_name": player.get("clan_name", "N/A"),
             "submitted_by": submitted_by,
+            "submitted_by_discord_id": int(submitter_discord_id) if submitter_discord_id is not None else None,
+            "submitted_by_server_id": int(submitter_server_id) if submitter_server_id is not None else None,
             "submitted_at": datetime.utcnow(),
             "mission_id": mission_id,
         }

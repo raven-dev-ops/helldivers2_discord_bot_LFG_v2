@@ -11,7 +11,7 @@ class ArrivalCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        """Register/upsert the member on join. No welcome messages or auto-roles."""
+        """Register/upsert the member on join. No DMs or auto-roles here."""
         try:
             # Restrict welcomes to the configured guild only
             if not guild_id or member.guild.id != guild_id:
@@ -42,6 +42,8 @@ class ArrivalCog(commands.Cog):
                 logging.info(
                     f"[ArrivalCog] Updated existing Alliance registration for {member.display_name}."
                 )
+
+            # Region assignment handled during registration interactions, not here.
 
         except Exception as e:
             logging.error(f"[ArrivalCog] Error registering {member.display_name}: {e}")
