@@ -7,6 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from collections import defaultdict
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+import hashlib
 from config import class_b_role_id
 try:
     # Python <3.9 may not define this; catch broadly
@@ -35,9 +36,115 @@ LEADERBOARD_IMAGE_PATH = "sos_leaderboard.png"
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 logger = logging.getLogger(__name__)
 
-# Fixed monthly focus per request
-FOCUS_TITLE = "Most Shots Fired"
-FOCUS_STAT_KEY = "shots_fired"
+# Monthly focus options (stat_key, display title)
+FOCUS_OPTIONS = [
+    ("shots_fired", "Most Shots Fired"),
+    ("shots_hit", "Most Shots Hit"),
+    ("kills", "Most Kills"),
+    ("average_kills", "Highest Average Kills"),
+    ("average_accuracy", "Best Accuracy"),
+    ("least_deaths", "Least Deaths"),
+    ("melee_kills", "Most Melee Kills"),
+    ("stims_used", "Most Stims Used"),
+    ("samples_extracted", "Most Samples Extracted"),
+    ("stratagems_used", "Most Stratagems Used"),
+    ("games_played", "Most Games Played"),
+]
+
+def _stable_month_index(year: int, month: int, n: int) -> int:
+    seed = f"{year:04d}-{month:02d}"
+    h = int(hashlib.sha256(seed.encode("utf-8")).hexdigest(), 16)
+    return h % max(1, n)
+
+def _prev_year_month(year: int, month: int) -> tuple[int, int]:
+    if month == 1:
+        return (year - 1, 12)
+    return (year, month - 1)
+
+async def pick_monthly_focus(now: datetime) -> tuple[str, str]:
+    """
+    Deterministically pick a monthly focus (stat_key, title) for the given datetime.
+    Ensures it isn't the same as the previous month.
+    Uses DB persistence when available to avoid repeating last real pick; falls back
+    to a stable hash-based selection otherwise.
+    """
+    # Default candidate based on stable hash of YYYY-MM
+    n = len(FOCUS_OPTIONS)
+    ci = _stable_month_index(now.year, now.month, n)
+    pi_year, pi_month = _prev_year_month(now.year, now.month)
+    pi = _stable_month_index(pi_year, pi_month, n)
+
+    candidate_key, candidate_title = FOCUS_OPTIONS[ci]
+
+    try:
+        # Attempt to respect last stored focus to avoid repeating real last pick
+        # even if the deterministic pick would differ.
+        mongo_uri = os.getenv('MONGODB_URI')
+        if mongo_uri is not None:
+            # If the bot has an initialized db, prefer that.
+            # Otherwise, a fresh client is used as a fallback.
+            from motor.motor_asyncio import AsyncIOMotorClient as _Client
+            db = getattr(pick_monthly_focus, "_db", None)
+            if db is None:
+                try:
+                    # Attach cached client/db to function attribute to avoid reconnects
+                    pick_monthly_focus._client = _Client(mongo_uri)  # type: ignore[attr-defined]
+                    pick_monthly_focus._db = pick_monthly_focus._client['GPTHellbot']  # type: ignore[attr-defined]
+                    db = pick_monthly_focus._db  # type: ignore[attr-defined]
+                except Exception:
+                    db = None
+
+            if db is not None:
+                server_listing = db['Server_Listing']
+                yyyymm = now.strftime("%Y-%m")
+                prev_year, prev_month = _prev_year_month(now.year, now.month)
+                prev_yyyymm = f"{prev_year:04d}-{prev_month:02d}"
+
+                # If current month focus already stored anywhere, use it.
+                doc_current = await server_listing.find_one({"leaderboard_focus_month": yyyymm}, {"leaderboard_focus_key": 1, "leaderboard_focus_title": 1})
+                if doc_current and isinstance(doc_current.get("leaderboard_focus_key"), str):
+                    k = doc_current.get("leaderboard_focus_key")
+                    t = doc_current.get("leaderboard_focus_title")
+                    return (k, t if isinstance(t, str) else next((title for key, title in FOCUS_OPTIONS if key == k), candidate_title))
+
+                # Else, determine previous month's actual stored pick if present
+                doc_prev = await server_listing.find_one({"leaderboard_focus_month": prev_yyyymm}, {"leaderboard_focus_key": 1})
+                prev_key = doc_prev.get("leaderboard_focus_key") if doc_prev else None
+
+                # Determine non-repeating candidate
+                if prev_key in {k for k, _ in FOCUS_OPTIONS}:
+                    if candidate_key == prev_key:
+                        # Shift to next option to guarantee non-repeat
+                        ci = (ci + 1) % n
+                        candidate_key, candidate_title = FOCUS_OPTIONS[ci]
+                else:
+                    # Fall back to avoiding deterministic previous index
+                    if ci == pi:
+                        ci = (ci + 1) % n
+                        candidate_key, candidate_title = FOCUS_OPTIONS[ci]
+
+                # Persist chosen focus for all servers for this month (best-effort)
+                try:
+                    await server_listing.update_many(
+                        {},
+                        {"$set": {
+                            "leaderboard_focus_month": yyyymm,
+                            "leaderboard_focus_key": candidate_key,
+                            "leaderboard_focus_title": candidate_title,
+                        }}
+                    )
+                except Exception:
+                    pass
+
+                return (candidate_key, candidate_title)
+    except Exception:
+        # If anything above fails, fall back to deterministic selection
+        pass
+
+    # Non-DB fallback: ensure not equal to previous month's deterministic pick
+    if ci == pi:
+        ci = (ci + 1) % n
+    return FOCUS_OPTIONS[ci]
 
 class LeaderboardCog(commands.Cog):
     """Dynamic monthly leaderboard with correct visibility."""
@@ -103,10 +210,11 @@ class LeaderboardCog(commands.Cog):
                 logger.warning("tzdata not installed; falling back to UTC for leaderboard title.")
                 now = datetime.utcnow()
             month_name = now.strftime("%B %Y")
-            # Styled title, keep the word 'Leaderboard' for cleanup detection
-            title = f"Most Shots Fired Leaderboard - {month_name}"
+            # Determine monthly focus and build a title that always contains 'Leaderboard'
+            focus_key, focus_title = await pick_monthly_focus(now)
+            title = f"{focus_title} Leaderboard - {month_name}"
 
-            leaderboard_data = await self.calculate_leaderboard_data(FOCUS_STAT_KEY, now.year, now.month)
+            leaderboard_data = await self.calculate_leaderboard_data(focus_key, now.year, now.month)
             # On the last day of the month, award submitter medals based on past 28 days
             try:
                 await self.maybe_award_submitter_medals(now)
@@ -116,7 +224,7 @@ class LeaderboardCog(commands.Cog):
                 await self.maybe_award_mvp(now, leaderboard_data)
             except Exception as e:
                 logger.warning(f"MVP awarding skipped due to error: {e}")
-            embeds = await self.build_leaderboard_embeds(leaderboard_data, title, FOCUS_STAT_KEY)
+            embeds = await self.build_leaderboard_embeds(leaderboard_data, title, focus_key)
             for guild in self.bot.guilds:
                 channel = await self.ensure_leaderboard_channel(guild)
                 if not channel:
@@ -859,8 +967,6 @@ async def setup(bot):
     if not hasattr(bot, 'mongo_db'):
         raise RuntimeError("LeaderboardCog requires bot.mongo_db to be initialized.")
     await bot.add_cog(LeaderboardCog(bot))
-
-
 
 
 
