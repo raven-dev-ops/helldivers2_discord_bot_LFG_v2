@@ -461,23 +461,39 @@ class LeaderboardCog(commands.Cog):
                 except Exception:
                     pass
 
-            # Fetch Alliance profiles by discord_id (valid id set)
+            # Fetch Alliance profiles, keyed by effective discord_id, and also by player_name.
+            # We unify results from both ID-based and name-based queries so that legacy rows
+            # with string discord_id values (or duplicate registrations) are still usable.
             profiles_by_did: dict[str, list[dict]] = {}
             valid_dids: set[str] = set()
+
+            def _add_profile(doc: dict) -> None:
+                """Attach an Alliance profile into profiles_by_did/valid_dids if it has a usable discord_id."""
+                try:
+                    did_val = doc.get("discord_id")
+                    if did_val in (None, ""):
+                        return
+                    key = str(int(did_val))
+                except Exception:
+                    return
+                bucket = profiles_by_did.setdefault(key, [])
+                # Avoid exact duplicates by _id
+                doc_id = doc.get("_id")
+                if any(existing.get("_id") == doc_id for existing in bucket):
+                    return
+                bucket.append(doc)
+                valid_dids.add(key)
+
+            # First, pull by discord_id for any stats that already carry a discord_id
             if stats_did_ints:
                 cur = alliance_collection.find(
                     {"discord_id": {"$in": list(stats_did_ints)}},
                     {"discord_id": 1, "player_name": 1, "discord_server_id": 1, "ship_name": 1, "server_name": 1}
                 )
                 for d in await cur.to_list(None):
-                    try:
-                        k = str(int(d.get("discord_id")))
-                        profiles_by_did.setdefault(k, []).append(d)
-                        valid_dids.add(k)
-                    except Exception:
-                        pass
+                    _add_profile(d)
 
-            # Fetch Alliance profiles by player_name to repair missing/invalid ids
+            # Then, pull by player_name for repair and for users missing/invalid ids
             profiles_by_name: dict[str, list[dict]] = {}
             if name_set:
                 cur2 = alliance_collection.find(
@@ -487,7 +503,9 @@ class LeaderboardCog(commands.Cog):
                 for d in await cur2.to_list(None):
                     nm = d.get("player_name")
                     if isinstance(nm, str) and nm.strip():
-                        profiles_by_name.setdefault(nm.strip(), []).append(d)
+                        name_key = nm.strip()
+                        profiles_by_name.setdefault(name_key, []).append(d)
+                    _add_profile(d)
 
             # Server name map for clan display when no Alliance profile is found
             server_name_map = {}
@@ -594,15 +612,27 @@ class LeaderboardCog(commands.Cog):
                 choices = profiles.get(did_key) or []
                 if not choices:
                     return None
+
                 primary_sid = primary_server_for.get(did_key)
-                if primary_sid is not None:
-                    for c in choices:
-                        try:
-                            if int(c.get("discord_server_id")) == int(primary_sid):
-                                return c
-                        except Exception:
-                            pass
-                return choices[0]
+
+                def score(doc: dict) -> int:
+                    s = 0
+                    # Prefer profiles that belong to the primary guild for this player
+                    try:
+                        if primary_sid is not None and doc.get("discord_server_id") is not None:
+                            if int(doc.get("discord_server_id")) == int(primary_sid):
+                                s += 10
+                    except Exception:
+                        pass
+                    # Prefer profiles that have more metadata filled out
+                    if doc.get("ship_name"):
+                        s += 3
+                    if doc.get("server_name"):
+                        s += 1
+                    return s
+
+                # Pick the highest scoring profile; max() is deterministic for equal scores
+                return max(choices, key=score)
 
             leaderboard = []
             for did_key, agg in players.items():
@@ -967,6 +997,5 @@ async def setup(bot):
     if not hasattr(bot, 'mongo_db'):
         raise RuntimeError("LeaderboardCog requires bot.mongo_db to be initialized.")
     await bot.add_cog(LeaderboardCog(bot))
-
 
 
