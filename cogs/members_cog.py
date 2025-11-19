@@ -22,8 +22,8 @@ class MembersCog(commands.Cog):
                 new_server_nickname = after.display_name.strip()
                 result = await alliance_collection.update_one(
                     {
-                        "discord_id": str(after.id),
-                        "discord_server_id": str(after.guild.id)
+                        "discord_id": int(after.id),
+                        "discord_server_id": int(after.guild.id)
                     },
                     {
                         "$set": {
